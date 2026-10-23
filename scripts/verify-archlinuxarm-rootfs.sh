@@ -34,6 +34,9 @@ etc/systemd/system/caihong-pen-charge.service
 etc/systemd/system/caihong-pen-charge.timer
 etc/systemd/system/caihong-pen-pair.service
 etc/systemd/system/caihong-pen-pair.timer
+etc/systemd/user/app.slice.d/50-caihong-scheduling.conf
+etc/systemd/user/background.slice.d/50-caihong-scheduling.conf
+etc/systemd/user/session.slice.d/50-caihong-scheduling.conf
 etc/systemd/system/bluetooth.target.wants/bluetooth.service
 etc/systemd/system/display-manager.service
 etc/systemd/system/multi-user.target.wants/NetworkManager.service
@@ -216,6 +219,16 @@ fi
 for path in $required_paths; do
 	if [ ! -e "$target/$path" ] && [ ! -L "$target/$path" ]; then
 		echo "missing required rootfs path: /$path" >&2
+		failed=1
+	fi
+done
+
+for slice_weight in app.slice:150 background.slice:20 session.slice:200; do
+	slice=${slice_weight%%:*}
+	weight=${slice_weight#*:}
+	config="$target/etc/systemd/user/$slice.d/50-caihong-scheduling.conf"
+	if ! grep -qx "CPUWeight=$weight" "$config" 2>/dev/null; then
+		echo "incorrect CPU weight for $slice" >&2
 		failed=1
 	fi
 done
