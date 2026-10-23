@@ -20,7 +20,7 @@ LOCK = Path("/run/lock/caihong-pen-scan.lock")
 DEFAULT_CONFIG = Path("/etc/caihong-pen.json")
 DEFAULT_IDENTITY = Path("/var/lib/caihong-pen/paired.json")
 DEFAULT_STATE = Path("/run/caihong-pen-charge/state.json")
-DEFAULT_MODULE = Path("/usr/local/lib/caihong/caihong_pen_power.ko")
+MODULE_NAME = "caihong_pen_power"
 ATTEMPT_TIMEOUT = 22
 RETRY_DELAYS = (30, 60, 120, 300, 600)
 FULL_BATTERY = 99
@@ -188,15 +188,24 @@ def result_reason(reason, returncode, request_timed_out):
     return reason
 
 
-def unload():
-    result = subprocess.run(["rmmod", "caihong_pen_power"],
+def module_loaded(module_name):
+    try:
+        return any(line.split(" ", 1)[0] == module_name
+                   for line in Path("/proc/modules").read_text().splitlines())
+    except OSError:
+        return False
+
+
+def unload(module_name):
+    result = subprocess.run(["modprobe", "-r", module_name],
                             capture_output=True, text=True, timeout=20)
     if result.returncode:
         raise ChargeError("module-unload-failed")
 
 
-def attempt(module, stop_requested):
-    subprocess.run(["insmod", str(module)], check=True,
+def attempt(module_name, stop_requested):
+    loaded_here = not module_loaded(module_name)
+    subprocess.run(["modprobe", module_name], check=True,
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     process = None
     deadline = time.monotonic() + ATTEMPT_TIMEOUT
@@ -226,7 +235,8 @@ def attempt(module, stop_requested):
     finally:
         if process is not None:
             stop_process(process)
-        unload()
+        if loaded_here:
+            unload(module_name)
 
 
 def main():
@@ -234,12 +244,11 @@ def main():
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--identity", type=Path, default=DEFAULT_IDENTITY)
     parser.add_argument("--state", type=Path, default=DEFAULT_STATE)
-    parser.add_argument("--module", type=Path, default=DEFAULT_MODULE)
     args = parser.parse_args()
     if os.geteuid() != 0:
         parser.error("run as root")
     configured_address, mode = load_config(args.config)
-    if mode != 1 or not args.module.exists():
+    if mode != 1:
         return 0
     state = read_state(args.state)
     now = time.monotonic()
@@ -264,7 +273,7 @@ def main():
         except BlockingIOError:
             return 0
         try:
-            reason, status, attach = attempt(args.module, lambda: stop_flag["value"])
+            reason, status, attach = attempt(MODULE_NAME, lambda: stop_flag["value"])
             status_fields = fields(status)
             attach_fields = fields(attach)
             detected_address = observed_address(attach)

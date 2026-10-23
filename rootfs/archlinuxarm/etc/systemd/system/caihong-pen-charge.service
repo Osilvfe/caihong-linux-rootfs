@@ -2,7 +2,7 @@
 Description=Bounded automatic Caihong pen charging attempt
 After=bluetooth.service
 ConditionPathExists=/etc/caihong-pen.json
-ConditionPathExists=/usr/local/lib/caihong/caihong_pen_power.ko
+ConditionPathExistsGlob=/lib/modules/%v/kernel/drivers/power/supply/caihong_pen_power.ko*
 
 [Service]
 Type=oneshot

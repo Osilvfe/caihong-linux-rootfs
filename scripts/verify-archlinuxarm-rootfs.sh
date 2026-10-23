@@ -195,12 +195,6 @@ else
 				;;
 		esac
 	done
-	pen_copy="$target/usr/local/lib/caihong/caihong_pen_power.ko"
-	pen_installed=$(find "$module_dir" -type f -name caihong_pen_power.ko -print -quit)
-	if [ -z "$pen_installed" ] || ! cmp -s "$pen_installed" "$pen_copy"; then
-		echo "on-demand pen module does not match the release module tree" >&2
-		failed=1
-	fi
 fi
 
 libcamera_commit=$(git -C "$project_dir/external/libcamera" rev-parse --verify HEAD)
@@ -222,6 +216,19 @@ for path in $required_paths; do
 		failed=1
 	fi
 done
+
+pen_script="$target/usr/local/sbin/caihong-pen-charge"
+pen_service="$target/etc/systemd/system/caihong-pen-charge.service"
+if grep -q '/usr/local/lib/caihong/caihong_pen_power\.ko' \
+	"$pen_script" "$pen_service" 2>/dev/null || \
+	[ -e "$target/usr/local/lib/caihong/caihong_pen_power.ko" ]; then
+	echo "obsolete standalone pen module copy is present" >&2
+	failed=1
+fi
+if ! grep -Fq 'subprocess.run(["modprobe", module_name]' "$pen_script" 2>/dev/null; then
+	echo "pen charge helper does not load from the standard module tree" >&2
+	failed=1
+fi
 
 for slice_weight in app.slice:150 background.slice:20 session.slice:200; do
 	slice=${slice_weight%%:*}

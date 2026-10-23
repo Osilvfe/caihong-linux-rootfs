@@ -599,8 +599,8 @@ rsync -a --exclude=SOURCE.md --exclude=SHA256SUMS \
 	"$rootfs/usr/lib/firmware/qcom/sm8650/SM8650-MTP-tplg.bin"
 
 # Register the kernel and its dependency-closed module tree with pacman.  The
-# package script updates the stable pen-module copy but is explicitly barred
-# from touching host block devices while this offline rootfs is constructed.
+# package script is explicitly barred from touching host block devices while
+# this offline rootfs is constructed.
 echo "installing linux-caihong pacman package"
 install -m 0644 "$kernel_package" "$rootfs/tmp/linux-caihong.pkg.tar.zst"
 rm -rf -- "$rootfs/usr/lib/modules"

@@ -90,7 +90,6 @@ required_paths=(
 	usr/local/sbin/caihong-pen-charge
 	usr/local/sbin/caihong-adbd-gadget
 	usr/local/sbin/caihong-adbd-run
-	usr/local/lib/caihong/caihong_pen_power.ko
 	usr/lib/linux-caihong/Image
 	usr/lib/linux-caihong/caihong.dtb
 	usr/lib/linux-caihong/boot-linux.img
@@ -116,6 +115,7 @@ required_paths=(
 	usr/lib/firmware/qcom/sm8650/bps-striping-bggr10-nv12-640x480.bin
 	etc/modules-load.d/armada-handheld.conf
 	etc/udev/rules.d/99-caihong-dma-heap.rules
+	etc/systemd/system/caihong-pen-charge.service
 	etc/systemd/system/multi-user.target.wants/caihong-hardware-mac.service
 	etc/systemd/system/multi-user.target.wants/caihong-adbd.service
 	etc/systemd/system/multi-user.target.wants/caihong-mark-boot-successful.service
@@ -131,6 +131,19 @@ required_paths=(
 for path in "${required_paths[@]}"; do
 	require_path "$path"
 done
+
+pen_script="$target/usr/local/sbin/caihong-pen-charge"
+pen_service="$target/etc/systemd/system/caihong-pen-charge.service"
+if grep -q '/usr/local/lib/caihong/caihong_pen_power\.ko' \
+	"$pen_script" "$pen_service" 2>/dev/null || \
+	[[ -e $target/usr/local/lib/caihong/caihong_pen_power.ko ]]; then
+	echo "obsolete standalone pen module copy is present" >&2
+	failed=1
+fi
+if ! grep -Fq 'subprocess.run(["modprobe", module_name]' "$pen_script" 2>/dev/null; then
+	echo "pen charge helper does not load from the standard module tree" >&2
+	failed=1
+fi
 
 if [[ -e $target/etc/alsa/state-daemon.conf ]]; then
 	echo "ALSA state daemon mode must be disabled in Armada" >&2
@@ -259,11 +272,6 @@ else
 	cmp -s "$target/usr/lib/linux-caihong/kernel-release" \
 		<(printf '%s\n' "$kernel_release") || {
 		echo "kernel metadata does not match module tree" >&2
-		failed=1
-	}
-	pen_installed=$(find "$module_dir" -type f -name caihong_pen_power.ko -print -quit)
-	cmp -s "$pen_installed" "$target/usr/local/lib/caihong/caihong_pen_power.ko" || {
-		echo "stable pen module copy does not match module tree" >&2
 		failed=1
 	}
 fi

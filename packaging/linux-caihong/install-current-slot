@@ -51,12 +51,7 @@ activate_modules()
 	chmod 0644 "$state_file"
 
 	depmod "$release"
-	pen_module=$(find "$runtime_modules" -type f \
-		-name caihong_pen_power.ko -print -quit)
-	if [ -n "$pen_module" ]; then
-		install -D -m 0644 "$pen_module" \
-			/usr/local/lib/caihong/caihong_pen_power.ko
-	fi
+	rm -f -- /usr/local/lib/caihong/caihong_pen_power.ko
 }
 
 remove_modules()
