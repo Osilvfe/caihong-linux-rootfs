@@ -90,7 +90,7 @@ cp -a "$stage"/. %{buildroot}/
 /usr/lib/linux-caihong/install-current-slot
 
 %preun
-if [ \"\$1\" -eq 0 ]; then
+if [ "\$1" -eq 0 ]; then
     /usr/lib/linux-caihong/install-current-slot --remove-modules
 fi
 
