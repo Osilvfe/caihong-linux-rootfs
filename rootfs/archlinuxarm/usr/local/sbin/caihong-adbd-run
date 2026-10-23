@@ -20,23 +20,33 @@ has_usb_worker()
 	return 1
 }
 
+has_configured_udc()
+{
+	local state
+	for state in /sys/class/udc/*/state; do
+		[[ -r $state ]] || continue
+		[[ $(<"$state") == configured ]] && return 0
+	done
+	return 1
+}
+
 trap stop_adbd EXIT INT TERM
 /usr/bin/adbd &
 adbd_pid=$!
 
-connected=0
 misses=0
 while kill -0 "$adbd_pid" 2>/dev/null; do
 	if has_usb_worker; then
-		connected=1
 		misses=0
-	elif ((connected)); then
-		((++misses < 5)) || {
+	elif has_configured_udc; then
+		((++misses < 25)) || {
 			echo "adbd lost its FunctionFS USB worker" >&2
 			exit 1
 		}
+	else
+		misses=0
 	fi
-	sleep 1
+	sleep 0.2
 done
 
 wait "$adbd_pid"
