@@ -257,6 +257,7 @@ without reflashing:
 ```sh
 sudo /usr/libexec/caihong-platform/install-caihong-platform \\
   {platform_package.name if platform_package else 'caihong-platform-archlinuxarm-<version>.tar.zst'}
+sudo pacman -U ./{rpm_package.name if rpm_package.is_file() else 'linux-caihong.rpm'}
 sudo /usr/libexec/caihong-platform/install-caihong-platform \\
   {npu_package.name if npu_package else 'caihong-npu-<version>-lib.tar.zst'}
 ```
@@ -320,15 +321,13 @@ def main() -> int:
         f"caihong-boot-userdata-{kernel_release}.img",
         kernel_package_name,
     ]
-    if rpm_package.is_file():
-        names.append(rpm_package.name)
     platform_package = release_dir / (
         release_dir / "CAIHONG_PLATFORM_PACKAGE"
     ).read_text().strip()
     npu_package = release_dir / (
         release_dir / "CAIHONG_NPU_PACKAGE"
     ).read_text().strip()
-    names.extend((platform_package.name, npu_package.name))
+    names.extend((rpm_package.name, platform_package.name, npu_package.name))
     for name in names:
         target = assets / name
         shutil.copy2(release_dir / name, target)
@@ -381,6 +380,11 @@ def main() -> int:
         },
         "dependencies": dependencies,
     }
+    manifest["kernel_rpm_package"] = {
+        "name": rpm_package.name,
+        "bytes": rpm_package.stat().st_size,
+        "sha256": asset_hashes[rpm_package.name],
+    }
     manifest["platform_package"] = {
         "name": platform_package.name,
         "bytes": platform_package.stat().st_size,
@@ -391,12 +395,6 @@ def main() -> int:
         "bytes": npu_package.stat().st_size,
         "sha256": asset_hashes[npu_package.name],
     }
-    if rpm_package.is_file():
-        manifest["rpm_package"] = {
-            "name": rpm_package.name,
-            "bytes": rpm_package.stat().st_size,
-            "sha256": asset_hashes[rpm_package.name],
-        }
     manifest_path = release_dir / "release-manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
     sums = release_dir / "SHA256SUMS"

@@ -13,7 +13,8 @@ else
 	rollback_only=0
 fi
 
-if (( ! rollback_only )) && { [ -z "$package" ] || [ ! -f "$package" ] || [ ! -d "$target_root" ]; }; then
+if [ "$rollback_only" -eq 0 ] &&
+	{ [ -z "$package" ] || [ ! -f "$package" ] || [ ! -d "$target_root" ]; }; then
 	echo "usage: $0 caihong-*.tar.zst" >&2
 	echo "       $0 --rollback COMPONENT" >&2
 	echo "CAIHONG_PLATFORM_ROOT may be set for offline installation" >&2
@@ -29,7 +30,7 @@ done
 
 work_dir=$(mktemp -d "${TMPDIR:-/tmp}/caihong-platform.XXXXXX") || exit 1
 target_root=$(cd -- "$target_root" && pwd)
-if (( rollback_only )); then
+if [ "$rollback_only" -eq 1 ]; then
 	case $component in
 		''|*[!A-Za-z0-9._-]*) echo "invalid component: ${component:-unset}" >&2; exit 2 ;;
 	esac
@@ -41,7 +42,7 @@ if (( rollback_only )); then
 	awk '{ a[NR] = $0 } END { for (record = NR; record >= 1; record--) print a[record] }' \
 		"$state/installed-manifest" |
 	while IFS=' ' read -r destination had_previous; do
-		relative=${destination#$target_root/}
+		relative=${destination#"$target_root"/}
 		previous="$state/previous/$relative"
 		rm -rf -- "$destination"
 		if [ "$had_previous" = yes ] && { [ -e "$previous" ] || [ -L "$previous" ]; }; then
@@ -106,7 +107,7 @@ rollback()
 	awk '{ a[NR] = $0 } END { for (record = NR; record >= 1; record--) print a[record] }' \
 		"$installed" |
 	while IFS=' ' read -r destination had_previous; do
-		relative=${destination#$target_root/}
+		relative=${destination#"$target_root"/}
 		previous="$state/previous/$relative"
 		rm -rf -- "$destination"
 		if [ "$had_previous" = yes ] && { [ -e "$previous" ] || [ -L "$previous" ]; }; then

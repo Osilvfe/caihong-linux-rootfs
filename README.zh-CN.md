@@ -261,6 +261,7 @@ successful 标记。
 ```sh
 sudo /usr/libexec/caihong-platform/install-caihong-platform \
   ./caihong-platform-archlinuxarm-<version>.tar.zst
+sudo pacman -U ./linux-caihong.rpm
 sudo /usr/libexec/caihong-platform/install-caihong-platform \
   ./caihong-npu-<version>-lib.tar.zst
 ```
@@ -271,8 +272,9 @@ sudo /usr/libexec/caihong-platform/install-caihong-platform \
 `caihong-platform-armada-<version>.tar.zst`。如需恢复上一版文件，运行
 `install-caihong-platform --rollback <component>`。
 
-Armada 不依赖 RPM 包管理器；同一事务载荷保持 Arch Linux ARM 和 Armada 的
-更新格式一致。
+同一个更新交付物包含内核 RPM。Armada 使用
+`caihong-platform-armada-<version>.tar.zst`；其不依赖 RPM 包管理器，直接用
+事务安装器更新平台组件。
 
 ## 本地构建
 
