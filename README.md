@@ -269,7 +269,7 @@ platform payload, then the matching NPU payload:
 ```sh
 sudo /usr/libexec/caihong-platform/install-caihong-platform \
   ./caihong-platform-archlinuxarm-<version>.tar.zst
-sudo pacman -U ./linux-caihong-<version>-1-aarch64.pkg.tar.zst
+sudo pacman -U ./linux-caihong.rpm
 sudo /usr/libexec/caihong-platform/install-caihong-platform \
   ./caihong-npu-<version>-lib.tar.zst
 ```
@@ -280,10 +280,9 @@ under `/etc` as `<file>.caihong-new` for explicit review. On Armada, use
 `caihong-platform-armada-<version>.tar.zst`. To restore the previous files, run
 `install-caihong-platform --rollback <component>`.
 
-The pacman kernel package is included in the same update bundle. On Armada, use
-`caihong-platform-armada-<version>.tar.zst`; Armada has no pacman or RPM package
-manager, so install its `caihong-kernel-armada-<version>.tar.zst` payload with
-`install-caihong-kernel`.
+The kernel RPM is included in the same update bundle. On Armada, use
+`caihong-platform-armada-<version>.tar.zst`; Armada updates do not use an RPM
+package manager, so install that payload with the transactional installer.
 
 ## Building locally
 

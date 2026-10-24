@@ -114,24 +114,6 @@ printf '%s\n' "$version" > "$stage/usr/share/caihong-package/version"
 printf '%s\n' "$distribution" > "$stage/usr/share/caihong-platform/distribution"
 [ -z "$kernel_release" ] || printf '%s\n' "$kernel_release" \
 	> "$stage/usr/share/caihong-platform/kernel-release"
-kernel_package_name=
-if [ -f "$release_dir/LINUX_CAIHONG_PACKAGE" ]; then
-	kernel_package_name=$(cat "$release_dir/LINUX_CAIHONG_PACKAGE")
-	if [ -z "$kernel_package_name" ] || [ ! -f "$release_dir/$kernel_package_name" ]; then
-		echo "invalid LINUX_CAIHONG_PACKAGE: ${kernel_package_name:-empty}" >&2
-		exit 1
-	fi
-	if [ -n "$kernel_release" ]; then
-		staged_kernel_release=$(bsdtar -xOf "$release_dir/$kernel_package_name" \
-			usr/lib/linux-caihong/kernel-release)
-		[ "$staged_kernel_release" = "$kernel_release" ] || {
-			echo "kernel package release $staged_kernel_release does not match platform release $kernel_release" >&2
-			exit 1
-		}
-	fi
-fi
-[ -z "$kernel_package_name" ] || printf '%s\n' "$kernel_package_name" \
-	> "$stage/usr/share/caihong-platform/kernel-package"
 printf '%s\n' "libdir=$libdir" \
 	> "$stage/usr/share/caihong-platform/layout"
 

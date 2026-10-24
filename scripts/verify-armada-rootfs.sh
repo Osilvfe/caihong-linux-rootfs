@@ -95,7 +95,6 @@ required_paths=(
 	usr/lib/linux-caihong/boot-linux.img
 	usr/lib/linux-caihong/boot-userdata.img
 	usr/lib/linux-caihong/kernel-release
-	usr/share/caihong-kernel/kernel-release
 	usr/share/alsa/ucm2/Qualcomm/sm8650/Caihong/HiFi.conf
 	usr/local/libexec/caihong-ssc/hexagonrpcd
 	usr/local/libexec/caihong-ssc/iio-sensor-proxy
