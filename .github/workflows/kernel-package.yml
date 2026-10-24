@@ -1,17 +1,23 @@
-name: Build Caihong kernel update package
+name: Build Caihong device update packages
 
 on:
   workflow_dispatch:
+    inputs:
+      include_npu:
+        description: Include the Qualcomm NPU runtime package
+        required: true
+        type: boolean
+        default: true
 
 permissions:
   contents: read
 
 concurrency:
-  group: caihong-kernel-package-${{ github.ref }}
+  group: caihong-device-update-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  kernel-package:
+  device-update:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 120
     env:
@@ -26,7 +32,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             alsa-utils bc bison build-essential ccache curl dwarves flex git \
-            kmod libarchive-tools libelf-dev libssl-dev python3 rsync zstd
+            kmod libarchive-tools libelf-dev libssl-dev python3 rsync shellcheck zstd
 
       - name: Resolve kernel dependencies
         run: DEPENDENCY_SCOPE=kernel scripts/checkout-dependencies.sh
@@ -47,14 +53,30 @@ jobs:
           ccache --set-config=compression_level=6
           ccache --zero-stats
 
-      - name: Build kernel update package
+      - name: Build kernel update packages
         run: |
           jobs=$(nproc)
           JOBS=$jobs ZSTD_THREADS=$jobs FORCE=1 \
             KERNEL_CC="ccache gcc" KERNEL_HOSTCC="ccache gcc" \
             scripts/build-kernel-release.sh
-          package=$(cat release/LINUX_CAIHONG_PACKAGE)
-          (cd release && sha256sum "$package" > SHA256SUMS.kernel-package)
+          DISTRIBUTION=archlinuxarm scripts/build-caihong-platform-package.sh release
+          DISTRIBUTION=armada scripts/build-caihong-platform-package.sh release
+          if [[ "${{ inputs.include_npu }}" == true ]]; then
+            scripts/build-caihong-npu-package.sh release
+            LIBDIR=lib64 scripts/build-caihong-npu-package.sh release
+          fi
+          (
+            cd release
+            sha256sum \
+              linux-caihong-*-aarch64.pkg.tar.zst \
+              linux-caihong-*-1.aarch64.rpm \
+              caihong-platform-archlinuxarm-*.tar.zst \
+              caihong-platform-armada-*.tar.zst \
+              > SHA256SUMS.device-update
+            if compgen -G 'caihong-npu-*.tar.zst' >/dev/null; then
+              sha256sum caihong-npu-*.tar.zst >> SHA256SUMS.device-update
+            fi
+          )
 
       - name: Show compiler cache statistics
         if: always()
@@ -67,14 +89,17 @@ jobs:
           path: .ccache
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('dependencies.env', 'linux/arch/arm64/configs/caihong_defconfig') }}-${{ github.run_id }}
 
-      - name: Upload kernel update package
+      - name: Upload device update packages
         uses: actions/upload-artifact@v4
         with:
-          name: linux-caihong-${{ github.run_id }}
+          name: caihong-device-update-${{ github.run_id }}
           path: |
             release/linux-caihong-*-aarch64.pkg.tar.zst
             release/linux-caihong-*-1.aarch64.rpm
-            release/SHA256SUMS.kernel-package
+            release/caihong-platform-archlinuxarm-*.tar.zst
+            release/caihong-platform-armada-*.tar.zst
+            release/caihong-npu-*.tar.zst
+            release/SHA256SUMS.device-update
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
