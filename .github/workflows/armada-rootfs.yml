@@ -68,6 +68,7 @@ jobs:
           JOBS=$jobs ZSTD_THREADS=$jobs FORCE=1 \
             KERNEL_CC="ccache gcc" KERNEL_HOSTCC="ccache gcc" \
             scripts/build-kernel-release.sh
+          scripts/build-caihong-kernel-armada-package.sh release
 
       - name: Show compiler cache statistics
         if: always()
@@ -107,6 +108,7 @@ jobs:
           cp release/release-manifest.json \
             release/armada-assets/caihong-armada-release-manifest.json
           cp release/ARMADA_NOTES.md release/armada-assets/
+          cp release/caihong-kernel-armada-*.tar.zst release/armada-assets/
           (
             cd release/armada-assets
             sha256sum caihong-armada-rootfs-* > SHA256SUMS.armada
@@ -124,7 +126,9 @@ jobs:
           publish=()
           for path in \
             release/armada-assets/caihong-armada-rootfs-* \
+            release/armada-assets/caihong-kernel-armada-* \
             release/armada-assets/caihong-armada-release-manifest.json \
+            release/armada-assets/release-manifest.json \
             release/armada-assets/SHA256SUMS.armada \
             release/armada-assets/ARMADA_NOTES.md; do
             [[ -f $path ]] || continue
@@ -139,7 +143,7 @@ jobs:
           done
           while IFS= read -r asset; do
             case "$asset" in
-              caihong-armada-rootfs-*|caihong-armada-release-manifest.json|SHA256SUMS.armada|ARMADA_NOTES.md)
+              caihong-armada-rootfs-*|caihong-kernel-armada-*|caihong-armada-release-manifest.json|release-manifest.json|SHA256SUMS.armada|ARMADA_NOTES.md)
                 if [[ -z ${current_assets[$asset]+present} ]]; then
                   gh release delete-asset "$RELEASE_TAG" "$asset" --yes
                 fi
@@ -162,7 +166,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: caihong-armada-kernel-package-${{ github.run_id }}
-          path: release/armada-assets/linux-caihong-*-aarch64.pkg.tar.zst
+          path: release/armada-assets/caihong-kernel-armada-*.tar.zst
           if-no-files-found: error
           compression-level: 0
           retention-days: 14
@@ -182,6 +186,7 @@ jobs:
           name: caihong-armada-metadata-${{ github.run_id }}
           path: |
             release/armada-assets/caihong-armada-release-manifest.json
+            release/armada-assets/release-manifest.json
             release/armada-assets/ARMADA_NOTES.md
             release/armada-assets/SHA256SUMS.armada
           if-no-files-found: error

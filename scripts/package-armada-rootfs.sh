@@ -233,6 +233,9 @@ install -m 0644 "$boot_userdata" "$rootfs/usr/lib/linux-caihong/boot-userdata.im
 install -m 0755 "$project_dir/packaging/linux-caihong/install-current-slot" \
 	"$rootfs/usr/lib/linux-caihong/install-current-slot"
 printf '%s\n' "$kernel_release" > "$rootfs/usr/lib/linux-caihong/kernel-release"
+install -d -m 0755 "$rootfs/usr/share/caihong-kernel"
+printf '%s\n' "$kernel_release" \
+	> "$rootfs/usr/share/caihong-kernel/kernel-release"
 
 echo "building Caihong hardware-address reader"
 install -d -m 0755 "$rootfs/usr/local/libexec"

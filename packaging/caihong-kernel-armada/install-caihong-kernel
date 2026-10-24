@@ -1,0 +1,123 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+set -eu
+CDPATH=
+
+target_root=${CAIHONG_PLATFORM_ROOT:-/}
+package=${1:-}
+if [ -z "$package" ] || [ ! -f "$package" ] || [ ! -d "$target_root" ]; then
+	echo "usage: $0 caihong-kernel-armada-<version>.tar.zst" >&2
+	echo "CAIHONG_PLATFORM_ROOT may be set for offline installation" >&2
+	exit 2
+fi
+
+for tool in awk bsdtar depmod find readlink sha256sum; do
+	command -v "$tool" >/dev/null 2>&1 || {
+		echo "missing required tool: $tool" >&2
+		exit 1
+	}
+done
+
+work_dir=$(mktemp -d "${TMPDIR:-/tmp}/caihong-kernel.XXXXXX") || exit 1
+target_root=$(cd -- "$target_root" && pwd)
+cleanup()
+{
+	rm -rf "$work_dir"
+}
+trap cleanup EXIT HUP INT TERM
+
+payload="$work_dir/payload"
+mkdir -p "$payload"
+bsdtar -xf "$package" -C "$payload" manifest usr
+(
+	cd "$payload"
+	while IFS='  ' read -r expected relative; do
+		if [ -L "$relative" ]; then
+			actual=$(readlink -- "$relative" | sha256sum | awk '{print $1}')
+		else
+			actual=$(sha256sum -- "$relative" | awk '{print $1}')
+		fi
+		[ "$actual" = "$expected" ] || {
+			echo "checksum mismatch: $relative" >&2
+			exit 1
+		}
+	done < manifest
+)
+
+release=$(cat "$payload/usr/lib/linux-caihong/kernel-release")
+state=$target_root/var/lib/caihong-packages/caihong-kernel-armada
+version=$(awk 'NR == 1 { sub(/\r$/, ""); print; exit }' \
+	"$payload/usr/share/caihong-package/version")
+mkdir -p "$state"
+installed=$work_dir/installed
+: > "$installed"
+rollback()
+{
+	awk '{ a[NR] = $0 } END { for (record = NR; record >= 1; record--) print a[record] }' \
+		"$installed" |
+	while IFS=' ' read -r destination had_previous; do
+		relative=${destination#"$target_root"/}
+		previous="$state/previous/$relative"
+		rm -rf -- "$destination"
+		if [ "$had_previous" = yes ] && { [ -e "$previous" ] || [ -L "$previous" ]; }; then
+			mkdir -p -- "$(dirname -- "$destination")"
+			mv -- "$previous" "$destination"
+		fi
+	done
+}
+trap 'rollback; cleanup' HUP INT TERM
+
+while IFS= read -r entry; do
+	path=${entry#./}
+	destination=$target_root/$path
+	relative=${destination#$target_root/}
+	previous="$state/previous/$relative"
+	mkdir -p -- "$(dirname -- "$destination")" "$(dirname -- "$previous")"
+	rm -rf -- "$previous"
+	had_previous=no
+	if [ -e "$destination" ] || [ -L "$destination" ]; then
+		mv -- "$destination" "$previous"
+		had_previous=yes
+	fi
+	if ! mv -- "$payload/$path" "$destination"; then
+		rollback
+		cleanup
+		exit 1
+	fi
+	printf '%s %s\n' "$destination" "$had_previous" >> "$installed"
+done <<EOF
+$(cd "$payload" && find ./usr -mindepth 1 \( -type f -o -type l \) -print | LC_ALL=C sort)
+EOF
+
+state_dir=$target_root/var/lib/linux-caihong
+mkdir -p "$state_dir" "$target_root/usr/lib/modules"
+printf '%s\n' "$release" > "$state_dir/active-releases.new"
+rm -rf -- "$target_root/usr/lib/modules/$release"
+mv -- "$payload/usr/lib/modules/$release" "$target_root/usr/lib/modules/$release"
+depmod -b "$target_root/usr" "$release"
+mv -- "$state_dir/active-releases.new" "$state_dir/active-releases"
+chmod 0644 "$state_dir/active-releases"
+
+if [ "$target_root" != / ]; then
+	printf '%s\n' "$version" > "$state/version"
+	cp "$payload/manifest" "$state/manifest"
+	cp "$installed" "$state/installed-manifest"
+	trap - HUP INT TERM
+	cleanup
+	echo "installed Caihong component caihong-kernel-armada $version for offline root"
+	exit 0
+fi
+
+if [ -e /sys/firmware/devicetree/base/compatible ] &&
+	grep -aFq 'oneplus,caihong' /sys/firmware/devicetree/base/compatible; then
+	/usr/lib/linux-caihong/install-current-slot
+else
+	echo "no compatible live device tree; boot flash was skipped"
+fi
+
+printf '%s\n' "$version" > "$state/version"
+cp "$payload/manifest" "$state/manifest"
+cp "$installed" "$state/installed-manifest"
+trap - HUP INT TERM
+cleanup
+echo "installed Caihong component caihong-kernel-armada $version"

@@ -40,7 +40,7 @@ jobs:
           sudo apt-get install -y \
             alsa-utils android-sdk-libsparse-utils bc bison build-essential \
             ccache curl dwarves e2fsprogs flex git kmod libarchive-tools \
-            libelf-dev libssl-dev python3 rpm rsync shellcheck zstd
+            libelf-dev libssl-dev python3 rsync shellcheck zstd
 
       - name: Restore package downloads
         uses: actions/cache@v4
@@ -76,8 +76,8 @@ jobs:
           JOBS=$jobs ZSTD_THREADS=$jobs FORCE=1 \
             KERNEL_CC="ccache gcc" KERNEL_HOSTCC="ccache gcc" \
             scripts/build-kernel-release.sh
-          scripts/build-linux-caihong-rpm.sh modules-current release
           DISTRIBUTION=archlinuxarm scripts/build-caihong-platform-package.sh release
+          scripts/build-caihong-kernel-armada-package.sh release
           scripts/build-caihong-npu-package.sh release
 
       - name: Show compiler cache statistics
@@ -119,7 +119,7 @@ jobs:
             --dependencies build/dependencies.resolved.env \
             --assets release/assets \
             --notes release/RELEASE_NOTES.md \
-            --require-rpm
+            --require-pacman-kernel
 
       - name: Publish GitHub release
         if: github.event_name == 'push' || inputs.publish_release
@@ -141,7 +141,7 @@ jobs:
             done
             while IFS= read -r asset; do
               case "$asset" in
-                caihong-boot-*|caihong-rootfs-*|linux-caihong-*|caihong-platform-*|caihong-npu-*)
+                caihong-boot-*|caihong-rootfs-*|linux-caihong-*|caihong-platform-*|caihong-kernel-armada-*|caihong-npu-*)
                   if [[ -z ${current_assets[$asset]+present} ]]; then
                     gh release delete-asset "$tag" "$asset" --yes
                   fi
@@ -176,7 +176,9 @@ jobs:
           name: caihong-kernel-package-${{ github.run_id }}
           path: |
             release/assets/linux-caihong-*-aarch64.pkg.tar.zst
-            release/assets/linux-caihong.rpm
+            release/assets/caihong-platform-archlinuxarm-*.tar.zst
+            release/assets/caihong-kernel-armada-*.tar.zst
+            release/assets/caihong-npu-*-lib.tar.zst
 
       - name: Upload device component artifacts
         if: github.event_name == 'workflow_dispatch' && !inputs.publish_release
@@ -185,6 +187,7 @@ jobs:
           name: caihong-device-components-${{ github.run_id }}
           path: |
             release/assets/caihong-platform-*
+            release/assets/caihong-kernel-armada-*
             release/assets/caihong-npu-*
           if-no-files-found: error
           compression-level: 0
