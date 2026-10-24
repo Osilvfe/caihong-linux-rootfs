@@ -26,12 +26,15 @@ jobs:
             scripts/build-kernel-release.sh \
             scripts/build-linux-caihong-package.sh \
             scripts/build-linux-caihong-rpm.sh \
+            scripts/build-caihong-npu-package.sh \
+            scripts/build-caihong-platform-package.sh \
             scripts/checkout-dependencies.sh \
             scripts/install-caihong-adbd.sh \
             scripts/install-caihong-modules.sh \
             scripts/package-armada-rootfs.sh \
             scripts/verify-armada-rootfs.sh \
             packaging/linux-caihong/install-current-slot \
+            packaging/caihong-platform/install-caihong-platform \
             rootfs/archlinuxarm/usr/local/sbin/caihong-bluetooth-autostart \
             rootfs/archlinuxarm/usr/local/sbin/caihong-hardware-mac \
             rootfs/archlinuxarm/usr/local/sbin/caihong-mark-boot-successful \

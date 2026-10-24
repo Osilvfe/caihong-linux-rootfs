@@ -47,6 +47,10 @@ root=PARTLABEL=linux rootfstype=ext4 rootwait rw
   流拆成按顺序排列的 `.part-00`、`.part-01` 等文件。
 - `linux-caihong-<version>-1-aarch64.pkg.tar.zst`：包含两种 boot 镜像
   和配套内核模块的 pacman 软件包。
+- `caihong-platform-archlinuxarm-<version>.tar.zst`：Caihong 服务、固件、
+  工具和设备集成的增量更新载荷。
+- `caihong-npu-<version>-lib[64].tar.zst`：Qualcomm NPU 运行时与 Hexagon DSP
+  组件的增量更新载荷。
 
 Release 说明会记录每个资产、重组后 zstd 压缩流和解压后可刷写镜像的 SHA-256，
 以及文件系统逻辑大小和实际使用的源码版本。可安装资产不会使用 ZIP 打包。
@@ -249,6 +253,26 @@ sudo pacman -U ./linux-caihong-*-aarch64.pkg.tar.zst
 软件包会读取本次启动时记录的实际槽位，根据根分区是 `linux` 还是 `userdata`
 选择镜像，只写入当前运行槽并读回校验。它不会修改 A/B 槽的 active、bootable 或
 successful 标记。
+
+## 设备组件更新
+
+已刷入 rootfs 的设备不需要重刷。按顺序安装对应的平台载荷和 NPU 载荷：
+
+```sh
+sudo /usr/libexec/caihong-platform/install-caihong-platform \
+  ./caihong-platform-archlinuxarm-<version>.tar.zst
+sudo /usr/libexec/caihong-platform/install-caihong-platform \
+  ./caihong-npu-<version>-lib.tar.zst
+```
+
+安装器会校验 manifest，先暂存每个文件，并把被覆盖文件备份到
+`/var/lib/caihong-packages/<component>/previous`。`/etc` 中的文件会保留为
+`<file>.caihong-new`，等待明确确认后再合并。Armada 使用
+`caihong-platform-armada-<version>.tar.zst`。如需恢复上一版文件，运行
+`install-caihong-platform --rollback <component>`。
+
+Armada 不依赖 RPM 包管理器；同一事务载荷保持 Arch Linux ARM 和 Armada 的
+更新格式一致。
 
 ## 本地构建
 

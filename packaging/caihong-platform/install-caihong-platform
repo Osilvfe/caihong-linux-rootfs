@@ -1,0 +1,156 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+set -eu
+CDPATH=
+
+target_root=${CAIHONG_PLATFORM_ROOT:-/}
+package=${1:-}
+
+if [ "$package" = --rollback ]; then
+	component=${2:-}
+	rollback_only=1
+else
+	rollback_only=0
+fi
+
+if (( ! rollback_only )) && { [ -z "$package" ] || [ ! -f "$package" ] || [ ! -d "$target_root" ]; }; then
+	echo "usage: $0 caihong-*.tar.zst" >&2
+	echo "       $0 --rollback COMPONENT" >&2
+	echo "CAIHONG_PLATFORM_ROOT may be set for offline installation" >&2
+	exit 2
+fi
+
+	for tool in awk bsdtar cat find mkdir mv rmdir readlink sha256sum; do
+	if ! command -v "$tool" >/dev/null 2>&1; then
+		echo "missing required tool: $tool" >&2
+		exit 1
+	fi
+done
+
+work_dir=$(mktemp -d "${TMPDIR:-/tmp}/caihong-platform.XXXXXX") || exit 1
+target_root=$(cd -- "$target_root" && pwd)
+if (( rollback_only )); then
+	case $component in
+		''|*[!A-Za-z0-9._-]*) echo "invalid component: ${component:-unset}" >&2; exit 2 ;;
+	esac
+	state=$target_root/var/lib/caihong-packages/$component
+	[ -f "$state/installed-manifest" ] || {
+		echo "no rollback manifest for component: $component" >&2
+		exit 1
+	}
+	awk '{ a[NR] = $0 } END { for (record = NR; record >= 1; record--) print a[record] }' \
+		"$state/installed-manifest" |
+	while IFS=' ' read -r destination had_previous; do
+		relative=${destination#$target_root/}
+		previous="$state/previous/$relative"
+		rm -rf -- "$destination"
+		if [ "$had_previous" = yes ] && { [ -e "$previous" ] || [ -L "$previous" ]; }; then
+			mkdir -p -- "$(dirname -- "$destination")"
+			mv -- "$previous" "$destination"
+		fi
+	done
+	rm -rf -- "$state"
+	echo "rolled back Caihong component $component"
+	parent_state=$target_root/var/lib/caihong-packages
+	if [ -d "$parent_state" ]; then
+		if [ -z "$(find "$parent_state" -mindepth 1 -maxdepth 1 -print -quit)" ]; then
+			rmdir -- "$parent_state"
+		fi
+	fi
+	exit 0
+fi
+
+cleanup()
+{
+	rm -rf "$work_dir"
+}
+trap cleanup EXIT HUP INT TERM
+
+payload="$work_dir/payload"
+installed="$work_dir/installed"
+mkdir -p "$payload"
+bsdtar -xf "$package" -C "$payload" manifest usr etc
+
+architecture=$(cat "$payload/usr/share/caihong-package/architecture" 2>/dev/null || true)
+component=$(cat "$payload/usr/share/caihong-package/package" 2>/dev/null || true)
+version=$(cat "$payload/usr/share/caihong-package/version" 2>/dev/null || true)
+if [ "$architecture" != aarch64 ] || [ -z "$component" ] || [ -z "$version" ]; then
+	echo "invalid or missing Caihong package metadata" >&2
+	exit 1
+fi
+case $component in
+	*[!A-Za-z0-9._-]*) echo "invalid component: $component" >&2; exit 2 ;;
+esac
+
+(
+	cd "$payload"
+	while IFS='  ' read -r expected relative; do
+		if [ -L "$relative" ]; then
+			actual=$(readlink -- "$relative" | sha256sum | awk '{print $1}')
+		else
+			actual=$(sha256sum -- "$relative" | awk '{print $1}')
+		fi
+		if [ "$actual" != "$expected" ]; then
+			echo "checksum mismatch: $relative" >&2
+			exit 1
+		fi
+	done < manifest
+)
+
+state=$target_root/var/lib/caihong-packages/$component
+mkdir -p "$state"
+: > "$installed"
+
+rollback()
+{
+	awk '{ a[NR] = $0 } END { for (record = NR; record >= 1; record--) print a[record] }' \
+		"$installed" |
+	while IFS=' ' read -r destination had_previous; do
+		relative=${destination#$target_root/}
+		previous="$state/previous/$relative"
+		rm -rf -- "$destination"
+		if [ "$had_previous" = yes ] && { [ -e "$previous" ] || [ -L "$previous" ]; }; then
+			mkdir -p -- "$(dirname -- "$destination")"
+			mv -- "$previous" "$destination"
+		fi
+	done
+}
+
+trap 'rollback; cleanup' HUP INT TERM
+
+while IFS= read -r entry; do
+	path=${entry#./}
+	case $path in
+		etc/*) destination=$target_root/$path.caihong-new ;;
+		*) destination=$target_root/$path ;;
+	esac
+	relative=${destination#$target_root/}
+	previous="$state/previous/$relative"
+
+	mkdir -p -- "$(dirname -- "$destination")" "$(dirname -- "$previous")"
+	rm -rf -- "$previous"
+	had_previous=no
+	if [ -e "$destination" ] || [ -L "$destination" ]; then
+		mv -- "$destination" "$previous"
+		had_previous=yes
+	fi
+	if ! mv -- "$payload/$path" "$destination"; then
+		rollback
+		cleanup
+		exit 1
+	fi
+	printf '%s %s\n' "$destination" "$had_previous" >> "$installed"
+done <<EOF
+$(cd "$payload" && find ./usr ./etc -mindepth 1 \( -type f -o -type l \) -print | LC_ALL=C sort)
+EOF
+
+printf '%s\n' "$version" > "$state/version"
+cp "$payload/manifest" "$state/manifest"
+cp "$installed" "$state/installed-manifest"
+
+trap - HUP INT TERM
+
+cleanup
+
+echo "installed Caihong component $component $version"
+echo "New configuration files ending in .caihong-new require manual review."

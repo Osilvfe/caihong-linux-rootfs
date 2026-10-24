@@ -38,6 +38,10 @@ hardware-ISP migration, validation procedure and remaining camera limitations.
   … files.
 - `linux-caihong-<version>-1-aarch64.pkg.tar.zst`: pacman package containing
   both direct-root boot images and the matching kernel modules.
+- `caihong-platform-archlinuxarm-<version>.tar.zst`: incremental update payload
+  for Caihong services, firmware, tools and device integration.
+- `caihong-npu-<version>-lib[64].tar.zst`: incremental update payload for the
+  Qualcomm NPU runtime and Hexagon DSP components.
 
 The Release description records the SHA-256 digests of every asset, the
 reconstructed zstd stream and the decompressed flashable image, together with
@@ -256,6 +260,27 @@ The package reads the slot recorded during the current boot, selects the image
 matching the actual `linux` or `userdata` root partition, writes only that
 running slot, and verifies the written bytes. It does not alter the A/B active,
 bootable, or successful flags.
+
+## Device component updates
+
+Existing rootfs installations do not need reflashing. Install the matching
+platform payload, then the matching NPU payload:
+
+```sh
+sudo /usr/libexec/caihong-platform/install-caihong-platform \
+  ./caihong-platform-archlinuxarm-<version>.tar.zst
+sudo /usr/libexec/caihong-platform/install-caihong-platform \
+  ./caihong-npu-<version>-lib.tar.zst
+```
+
+The installer verifies the manifest, stages each file, backs up overwritten
+files under `/var/lib/caihong-packages/<component>/previous`, and leaves files
+under `/etc` as `<file>.caihong-new` for explicit review. On Armada, use
+`caihong-platform-armada-<version>.tar.zst`. To restore the previous files, run
+`install-caihong-platform --rollback <component>`.
+
+Armada updates do not use an RPM package manager; the same transactional
+payload keeps the Arch Linux ARM and Armada update formats aligned.
 
 ## Building locally
 

@@ -77,6 +77,8 @@ jobs:
             KERNEL_CC="ccache gcc" KERNEL_HOSTCC="ccache gcc" \
             scripts/build-kernel-release.sh
           scripts/build-linux-caihong-rpm.sh modules-current release
+          DISTRIBUTION=archlinuxarm scripts/build-caihong-platform-package.sh release
+          scripts/build-caihong-npu-package.sh release
 
       - name: Show compiler cache statistics
         if: always()
@@ -139,7 +141,7 @@ jobs:
             done
             while IFS= read -r asset; do
               case "$asset" in
-                caihong-boot-*|caihong-rootfs-*|linux-caihong-*)
+                caihong-boot-*|caihong-rootfs-*|linux-caihong-*|caihong-platform-*|caihong-npu-*)
                   if [[ -z ${current_assets[$asset]+present} ]]; then
                     gh release delete-asset "$tag" "$asset" --yes
                   fi
@@ -175,6 +177,15 @@ jobs:
           path: |
             release/assets/linux-caihong-*-aarch64.pkg.tar.zst
             release/assets/linux-caihong.rpm
+
+      - name: Upload device component artifacts
+        if: github.event_name == 'workflow_dispatch' && !inputs.publish_release
+        uses: actions/upload-artifact@v4
+        with:
+          name: caihong-device-components-${{ github.run_id }}
+          path: |
+            release/assets/caihong-platform-*
+            release/assets/caihong-npu-*
           if-no-files-found: error
           compression-level: 0
           retention-days: 3

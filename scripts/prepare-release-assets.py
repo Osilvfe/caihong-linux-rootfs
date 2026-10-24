@@ -161,6 +161,14 @@ def write_release_notes(
     checksums = "".join(
         f"{asset_hashes[asset.name]}  {asset.name}\n" for asset in assets
     )
+    platform_package = next(
+        (asset for asset in assets if asset.name.startswith("caihong-platform-")),
+        None,
+    )
+    npu_package = next(
+        (asset for asset in assets if asset.name.startswith("caihong-npu-")),
+        None,
+    )
     source_lines = []
     for component in ("LINUX", "LIBCAMERA", "PLASMA_CAMERA", "QBOOTCTL", "MKBOOTIMG"):
         repository = dependencies.get(f"{component}_REPOSITORY")
@@ -241,6 +249,18 @@ Decompressed flashable rootfs SHA-256:
 {rootfs_hash}  {rootfs.name}
 ```
 
+## Existing rootfs updates
+
+After verifying the SHA-256 values below, install the device-only payloads
+without reflashing:
+
+```sh
+sudo /usr/libexec/caihong-platform/install-caihong-platform \\
+  {platform_package.name if platform_package else 'caihong-platform-archlinuxarm-<version>.tar.zst'}
+sudo /usr/libexec/caihong-platform/install-caihong-platform \\
+  {npu_package.name if npu_package else 'caihong-npu-<version>-lib.tar.zst'}
+```
+
 ## Asset SHA-256
 
 ```text
@@ -302,6 +322,13 @@ def main() -> int:
     ]
     if rpm_package.is_file():
         names.append(rpm_package.name)
+    platform_package = release_dir / (
+        release_dir / "CAIHONG_PLATFORM_PACKAGE"
+    ).read_text().strip()
+    npu_package = release_dir / (
+        release_dir / "CAIHONG_NPU_PACKAGE"
+    ).read_text().strip()
+    names.extend((platform_package.name, npu_package.name))
     for name in names:
         target = assets / name
         shutil.copy2(release_dir / name, target)
@@ -353,6 +380,16 @@ def main() -> int:
             },
         },
         "dependencies": dependencies,
+    }
+    manifest["platform_package"] = {
+        "name": platform_package.name,
+        "bytes": platform_package.stat().st_size,
+        "sha256": asset_hashes[platform_package.name],
+    }
+    manifest["npu_package"] = {
+        "name": npu_package.name,
+        "bytes": npu_package.stat().st_size,
+        "sha256": asset_hashes[npu_package.name],
     }
     if rpm_package.is_file():
         manifest["rpm_package"] = {
