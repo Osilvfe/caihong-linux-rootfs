@@ -70,7 +70,7 @@ trap 'rollback; cleanup' HUP INT TERM
 while IFS= read -r entry; do
 	path=${entry#./}
 	destination=$target_root/$path
-	relative=${destination#$target_root/}
+	relative=${destination#"$target_root"/}
 	previous="$state/previous/$relative"
 	mkdir -p -- "$(dirname -- "$destination")" "$(dirname -- "$previous")"
 	rm -rf -- "$previous"

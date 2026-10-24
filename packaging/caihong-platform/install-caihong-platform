@@ -125,7 +125,7 @@ while IFS= read -r entry; do
 		etc/*) destination=$target_root/$path.caihong-new ;;
 		*) destination=$target_root/$path ;;
 	esac
-	relative=${destination#$target_root/}
+	relative=${destination#"$target_root"/}
 	previous="$state/previous/$relative"
 
 	mkdir -p -- "$(dirname -- "$destination")" "$(dirname -- "$previous")"
