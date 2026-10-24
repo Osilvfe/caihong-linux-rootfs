@@ -38,6 +38,8 @@ hardware-ISP migration, validation procedure and remaining camera limitations.
   … files.
 - `linux-caihong-<version>-1-aarch64.pkg.tar.zst`: pacman package containing
   both direct-root boot images and the matching kernel modules.
+- `linux-caihong-<version>-1.aarch64.rpm`: RPM package for Fedora-based Armada
+  containing the same kernel payload.
 - `caihong-platform-archlinuxarm-<version>.tar.zst`: incremental update payload
   for Caihong services, firmware, tools and device integration.
 - `caihong-npu-<version>-lib[64].tar.zst`: incremental update payload for the
@@ -250,10 +252,16 @@ modules.
 
 ## Kernel updates
 
-Upgrade the kernel, DTB and modules from a release package with:
+Upgrade an Arch Linux ARM installation with the matching pacman package:
 
 ```sh
 sudo pacman -U ./linux-caihong-*-aarch64.pkg.tar.zst
+```
+
+Upgrade a Fedora-based Armada installation with the matching RPM:
+
+```sh
+sudo dnf install ./linux-caihong-*-1.aarch64.rpm
 ```
 
 The package reads the slot recorded during the current boot, selects the image
@@ -269,7 +277,7 @@ platform payload, then the matching NPU payload:
 ```sh
 sudo /usr/libexec/caihong-platform/install-caihong-platform \
   ./caihong-platform-archlinuxarm-<version>.tar.zst
-sudo pacman -U ./linux-caihong.rpm
+sudo pacman -U ./linux-caihong-<version>-1-aarch64.pkg.tar.zst
 sudo /usr/libexec/caihong-platform/install-caihong-platform \
   ./caihong-npu-<version>-lib.tar.zst
 ```
@@ -280,9 +288,9 @@ under `/etc` as `<file>.caihong-new` for explicit review. On Armada, use
 `caihong-platform-armada-<version>.tar.zst`. To restore the previous files, run
 `install-caihong-platform --rollback <component>`.
 
-The kernel RPM is included in the same update bundle. On Armada, use
-`caihong-platform-armada-<version>.tar.zst`; Armada updates do not use an RPM
-package manager, so install that payload with the transactional installer.
+The kernel RPM is included in the same update bundle. Armada is Fedora-based:
+install `caihong-platform-armada-<version>.tar.zst` with the transactional
+installer, then install `linux-caihong-<version>-1.aarch64.rpm` with DNF.
 
 ## Building locally
 

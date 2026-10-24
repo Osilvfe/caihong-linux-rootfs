@@ -76,6 +76,7 @@ jobs:
           JOBS=$jobs ZSTD_THREADS=$jobs FORCE=1 \
             KERNEL_CC="ccache gcc" KERNEL_HOSTCC="ccache gcc" \
             scripts/build-kernel-release.sh
+          scripts/build-linux-caihong-package.sh
           scripts/build-linux-caihong-rpm.sh modules-current release
           DISTRIBUTION=archlinuxarm scripts/build-caihong-platform-package.sh release
           scripts/build-caihong-npu-package.sh release
@@ -119,7 +120,6 @@ jobs:
             --dependencies build/dependencies.resolved.env \
             --assets release/assets \
             --notes release/RELEASE_NOTES.md \
-            --require-rpm
 
       - name: Publish GitHub release
         if: github.event_name == 'push' || inputs.publish_release
@@ -176,7 +176,7 @@ jobs:
           name: caihong-kernel-package-${{ github.run_id }}
           path: |
             release/assets/linux-caihong-*-aarch64.pkg.tar.zst
-            release/assets/linux-caihong.rpm
+            release/assets/linux-caihong-*-1.aarch64.rpm
 
       - name: Upload device component artifacts
         if: github.event_name == 'workflow_dispatch' && !inputs.publish_release

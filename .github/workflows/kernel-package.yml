@@ -73,6 +73,7 @@ jobs:
           name: linux-caihong-${{ github.run_id }}
           path: |
             release/linux-caihong-*-aarch64.pkg.tar.zst
+            release/linux-caihong-*-1.aarch64.rpm
             release/SHA256SUMS.kernel-package
           if-no-files-found: error
           compression-level: 0

@@ -47,6 +47,8 @@ root=PARTLABEL=linux rootfstype=ext4 rootwait rw
   流拆成按顺序排列的 `.part-00`、`.part-01` 等文件。
 - `linux-caihong-<version>-1-aarch64.pkg.tar.zst`：包含两种 boot 镜像
   和配套内核模块的 pacman 软件包。
+- `linux-caihong-<version>-1.aarch64.rpm`：供 Fedora 基础 Armada 使用的 RPM，
+  内容与 pacman 包相同。
 - `caihong-platform-archlinuxarm-<version>.tar.zst`：Caihong 服务、固件、
   工具和设备集成的增量更新载荷。
 - `caihong-npu-<version>-lib[64].tar.zst`：Qualcomm NPU 运行时与 Hexagon DSP
@@ -244,10 +246,16 @@ rootfs 还包含 Caihong SSC 服务、定制 libcamera、Plasma Camera 集成、
 
 ## 内核升级
 
-使用 Release 中的 pacman 软件包升级内核、设备树和模块：
+Arch Linux ARM 安装使用 Release 中的 pacman 软件包升级内核、设备树和模块：
 
 ```sh
 sudo pacman -U ./linux-caihong-*-aarch64.pkg.tar.zst
+```
+
+基于 Fedora 的 Armada 安装使用匹配的 RPM：
+
+```sh
+sudo dnf install ./linux-caihong-*-1.aarch64.rpm
 ```
 
 软件包会读取本次启动时记录的实际槽位，根据根分区是 `linux` 还是 `userdata`
@@ -261,7 +269,7 @@ successful 标记。
 ```sh
 sudo /usr/libexec/caihong-platform/install-caihong-platform \
   ./caihong-platform-archlinuxarm-<version>.tar.zst
-sudo pacman -U ./linux-caihong.rpm
+sudo pacman -U ./linux-caihong-<version>-1-aarch64.pkg.tar.zst
 sudo /usr/libexec/caihong-platform/install-caihong-platform \
   ./caihong-npu-<version>-lib.tar.zst
 ```
@@ -272,9 +280,9 @@ sudo /usr/libexec/caihong-platform/install-caihong-platform \
 `caihong-platform-armada-<version>.tar.zst`。如需恢复上一版文件，运行
 `install-caihong-platform --rollback <component>`。
 
-同一个更新交付物包含内核 RPM。Armada 使用
-`caihong-platform-armada-<version>.tar.zst`；其不依赖 RPM 包管理器，直接用
-事务安装器更新平台组件。
+同一个更新交付物包含内核 RPM。Armada 基于 Fedora：用事务安装器安装
+`caihong-platform-armada-<version>.tar.zst`，再用 DNF 安装
+`linux-caihong-<version>-1.aarch64.rpm`。
 
 ## 本地构建
 

@@ -32,7 +32,8 @@ for input in "$boot_linux" "$boot_userdata"; do
 done
 
 version=$(printf '%s' "$release" | sed 's/[^[:alnum:].+~^]/./g')
-output="$release_dir/linux-caihong.rpm"
+package_name="linux-caihong-$version-1.aarch64.rpm"
+output="$release_dir/$package_name"
 temporary="$output.new"
 work_dir=$(mktemp -d "${TMPDIR:-/tmp}/linux-caihong-rpm.XXXXXX")
 stage="$work_dir/stage"
@@ -109,6 +110,7 @@ built=$(find "$topdir/RPMS" -type f -name 'linux-caihong-*.rpm' -print)
 }
 install -m 0644 "$built" "$temporary"
 mv -- "$temporary" "$output"
+printf '%s\n' "${output##*/}" > "$release_dir/LINUX_CAIHONG_RPM"
 
 [ "$(rpm -qp --queryformat '%{NAME}\n' "$output")" = linux-caihong ]
 [ "$(rpm -qp --queryformat '%{ARCH}\n' "$output")" = aarch64 ]

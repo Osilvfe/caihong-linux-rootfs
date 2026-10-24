@@ -169,6 +169,14 @@ def write_release_notes(
         (asset for asset in assets if asset.name.startswith("caihong-npu-")),
         None,
     )
+    pacman_package = next(
+        (asset for asset in assets if asset.name.endswith("-aarch64.pkg.tar.zst")),
+        None,
+    )
+    rpm_package = next(
+        (asset for asset in assets if asset.name.endswith("-1.aarch64.rpm")),
+        None,
+    )
     source_lines = []
     for component in ("LINUX", "LIBCAMERA", "PLASMA_CAMERA", "QBOOTCTL", "MKBOOTIMG"):
         repository = dependencies.get(f"{component}_REPOSITORY")
@@ -257,9 +265,19 @@ without reflashing:
 ```sh
 sudo /usr/libexec/caihong-platform/install-caihong-platform \\
   {platform_package.name if platform_package else 'caihong-platform-archlinuxarm-<version>.tar.zst'}
-sudo pacman -U ./{rpm_package.name if rpm_package.is_file() else 'linux-caihong.rpm'}
+sudo pacman -U ./{pacman_package.name if pacman_package else 'linux-caihong-<version>-1-aarch64.pkg.tar.zst'}
 sudo /usr/libexec/caihong-platform/install-caihong-platform \\
   {npu_package.name if npu_package else 'caihong-npu-<version>-lib.tar.zst'}
+```
+
+Armada is Fedora-based. Use the matching RPM instead:
+
+```sh
+sudo /usr/libexec/caihong-platform/install-caihong-platform \\
+  {platform_package.name if platform_package else 'caihong-platform-armada-<version>.tar.zst'}
+sudo dnf install ./{rpm_package.name if rpm_package else 'linux-caihong-<version>-1.aarch64.rpm'}
+sudo /usr/libexec/caihong-platform/install-caihong-platform \\
+  {npu_package.name if npu_package else 'caihong-npu-<version>-lib64.tar.zst'}
 ```
 
 ## Asset SHA-256
@@ -281,7 +299,6 @@ def main() -> int:
     parser.add_argument("--dependencies", type=Path, required=True)
     parser.add_argument("--assets", type=Path, required=True)
     parser.add_argument("--notes", type=Path, required=True)
-    parser.add_argument("--require-rpm", action="store_true")
     args = parser.parse_args()
 
     release_dir = args.release_dir.resolve()
@@ -304,8 +321,9 @@ def main() -> int:
     kernel_package = release_dir / kernel_package_name
     if not kernel_package.is_file():
         raise RuntimeError(f"kernel package does not exist: {kernel_package}")
-    rpm_package = release_dir / "linux-caihong.rpm"
-    if args.require_rpm and not rpm_package.is_file():
+    rpm_package_name = (release_dir / "LINUX_CAIHONG_RPM").read_text().strip()
+    rpm_package = release_dir / rpm_package_name
+    if not rpm_package.is_file():
         raise RuntimeError(f"kernel RPM does not exist: {rpm_package}")
 
     compressed_rootfs = release_dir / f"{rootfs.name}.zst"
@@ -327,7 +345,7 @@ def main() -> int:
     npu_package = release_dir / (
         release_dir / "CAIHONG_NPU_PACKAGE"
     ).read_text().strip()
-    names.extend((rpm_package.name, platform_package.name, npu_package.name))
+    names.extend((rpm_package_name, platform_package.name, npu_package.name))
     for name in names:
         target = assets / name
         shutil.copy2(release_dir / name, target)
@@ -381,9 +399,9 @@ def main() -> int:
         "dependencies": dependencies,
     }
     manifest["kernel_rpm_package"] = {
-        "name": rpm_package.name,
+        "name": rpm_package_name,
         "bytes": rpm_package.stat().st_size,
-        "sha256": asset_hashes[rpm_package.name],
+        "sha256": asset_hashes[rpm_package_name],
     }
     manifest["platform_package"] = {
         "name": platform_package.name,
