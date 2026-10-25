@@ -31,7 +31,7 @@ root=PARTLABEL=linux rootfstype=ext4 rootwait rw
 | USB 与外接显示 | 正常 | USB host/device 控制器和 DP Alt Mode 可用。 |
 | CPU 与休眠 | 正常 | CPU 调频和休眠恢复可用；默认关闭 3.3024 GHz boost。 |
 | 电池与快充 | 基本正常 | 电量显示以及已测试的 PPS/VOOC 快充可用；其他充电协议暂未适配。 |
-| 存储 | 正常 | 存储功能可用，MCQ 队列与完整频率表尚未配置。 |
+| 存储 | 正常 | UFS 存储可用，MCQ 已启用（实测日志为 9 个硬件队列、最大命令深度 64）。设备专属完整频率表仍待补充。 |
 
 硬件 ISP 迁移结果、验证方法和剩余限制见
 [CAMERA_HARDWARE_ISP.md](CAMERA_HARDWARE_ISP.md)。

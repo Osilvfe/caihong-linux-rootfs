@@ -21,7 +21,7 @@ development release for this device; review the status table before installing.
 | USB and external display | Working | USB host/device controllers and DP Alt Mode work. |
 | CPU and suspend | Working | CPU frequency scaling and suspend/resume work. The 3.3024 GHz boost is disabled by default. |
 | Battery and fast charging | Mostly working | Battery reporting and tested PPS/VOOC charging work. Other charging protocols are not yet supported. |
-| Storage | Working | Storage works; MCQ queues and the complete frequency table are not yet configured. |
+| Storage | Working | UFS storage works with MCQ enabled (9 hardware queues and a maximum command depth of 64 in validated logs). A device-specific full frequency table is still pending. |
 
 See [CAMERA_HARDWARE_ISP.md](CAMERA_HARDWARE_ISP.md) for the completed
 hardware-ISP migration, validation procedure and remaining camera limitations.
