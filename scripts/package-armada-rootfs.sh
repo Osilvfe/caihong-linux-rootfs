@@ -275,10 +275,12 @@ if [[ -n $npu_package ]]; then
 		"$rootfs/tmp/caihong-packages/$(<"$project_dir/release/CAIHONG_NPU_PACKAGE")"
 fi
 if [[ -n $platform_package ]]; then
+	CAIHONG_PLATFORM_ROOT="$rootfs" \
 	"$project_dir/packaging/caihong-platform/install-caihong-platform" \
 		"$rootfs/tmp/caihong-packages/$(<"$project_dir/release/CAIHONG_PLATFORM_PACKAGE")"
 fi
 if [[ -n $npu_package ]]; then
+	CAIHONG_PLATFORM_ROOT="$rootfs" \
 	"$project_dir/packaging/caihong-platform/install-caihong-platform" \
 		"$rootfs/tmp/caihong-packages/$(<"$project_dir/release/CAIHONG_NPU_PACKAGE")"
 fi
@@ -287,7 +289,7 @@ if [[ -n $kernel_rpm ]]; then
 	install -m 0644 "$kernel_rpm" "$rootfs/tmp/linux-caihong.rpm"
 	chroot "$rootfs" /usr/bin/env -i \
 		HOME=/root LANG=C PATH=/usr/sbin:/usr/bin:/sbin:/bin \
-		/usr/bin/dnf5 -y install /tmp/linux-caihong.rpm
+		/usr/bin/dnf5 -y --disablerepo='*' install /tmp/linux-caihong.rpm
 	chroot "$rootfs" rpm -q linux-caihong >/dev/null || \
 		fail "linux-caihong RPM was not registered"
 	rm -f -- "$rootfs/tmp/linux-caihong.rpm"

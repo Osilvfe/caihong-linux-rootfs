@@ -603,10 +603,12 @@ if [[ -n $npu_package ]]; then
 		"$rootfs/tmp/caihong-packages/$(<"$project_dir/release/CAIHONG_NPU_PACKAGE")"
 fi
 if [[ -n $platform_package ]]; then
+	CAIHONG_PLATFORM_ROOT="$rootfs" \
 	"$project_dir/packaging/caihong-platform/install-caihong-platform" \
 		"$rootfs/tmp/caihong-packages/$(<"$project_dir/release/CAIHONG_PLATFORM_PACKAGE")"
 fi
 if [[ -n $npu_package ]]; then
+	CAIHONG_PLATFORM_ROOT="$rootfs" \
 	"$project_dir/packaging/caihong-platform/install-caihong-platform" \
 		"$rootfs/tmp/caihong-packages/$(<"$project_dir/release/CAIHONG_NPU_PACKAGE")"
 fi
