@@ -10,7 +10,7 @@ development release for this device; review the status table before installing.
 
 | Area | Status | Notes |
 | --- | --- | --- |
-| Display and GPU | Mostly working | The internal 3000×2120 display, Adreno GPU and brightness control work. Occasional small panel artifacts remain. |
+| Display and GPU | Mostly working | The internal 3000×2120 display, Adreno GPU and brightness control work. 60/72/96/120 Hz switch seamlessly, while 144 Hz still needs a blank-screen mode switch. Occasional small panel artifacts remain. |
 | Touch and pen | Working | 10-point touch, hover, pressure, drawing, suspend/resume, magnetic pen charging and clean first-time pairing have been tested. |
 | Pogo keyboard | Mostly working | The Android-oriented top row is remapped to F1–F12, with Search acting as Fn. The keyboard and touchpad work; a key press can briefly pause the touchpad. |
 | Wi-Fi | Mostly working | Client mode, factory MAC address and concurrent STA/AP mode work. Resume can be slow; the current BDF is a compatible vendor entry rather than a Caihong-specific calibration. |
@@ -19,8 +19,9 @@ development release for this device; review the status table before installing.
 | Sensors and hall switch | Working | Accelerometer, gyroscope, ambient light, automatic brightness and cover hall switch work. |
 | Audio | Working | Microphones and stereo speakers work. Speaker volume is lower than stock Android; Dolby and the complete stock tuning are not included. |
 | USB and external display | Working | USB host/device controllers and DP Alt Mode work. |
-| CPU and suspend | Working | CPU frequency scaling and suspend/resume work. The 3.3024 GHz boost is disabled by default. |
-| Battery and fast charging | Mostly working | Battery reporting and tested PPS/VOOC charging work. Other charging protocols are not yet supported. |
+| CPU and suspend | Working | CPU frequency scaling and both `s2idle` and deep suspend/resume work. Network reconnect after resume can be slow. The 3.3024 GHz boost is disabled by default. |
+| Battery and fast charging | Mostly working | Battery reporting and tested PPS/VOOC charging work. VOOC applies thermal current limits and can report transient retry/fault messages during entry; monitoring remains necessary. Other charging protocols are not yet supported. |
+| NPU and VPU | Working | CDSP/HTP NPU tests pass, including Hexagon v75, QNN float and quantized Conv2d workloads. Iris VPU H.264 and HEVC hardware decoding passed mixed-load regression runs; encoder support is untested. |
 | Storage | Working | UFS storage works with MCQ enabled (9 hardware queues and a maximum command depth of 64 in validated logs). A device-specific full frequency table is still pending. |
 
 See [CAMERA_HARDWARE_ISP.md](CAMERA_HARDWARE_ISP.md) for the completed
