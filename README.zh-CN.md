@@ -164,6 +164,8 @@ adb reboot bootloader
 fastboot devices
 fastboot getvar current-slot
 
+fastboot --disable-verity --disable-verification flash vbmeta vbmeta.img
+
 LINUX_SLOT=b
 BOOT=caihong-boot-linux-<kernel-release>.img
 ROOTFS=caihong-rootfs.ext4.sparse.img
@@ -178,6 +180,10 @@ fastboot reboot
 只擦除所选 Linux 槽对应的 DTBO。Caihong 设备树已经包含在 boot 镜像内；务必保留
 Android 槽的 DTBO。
 
+启动 Caihong 前必须关闭 Android Verified Boot。请使用设备官方 Android 出厂镜像
+中配套的 `vbmeta.img`，并加 `--disable-verity --disable-verification` 刷写。如果
+跳过这一步，bootloader 可能拒绝自定义 boot 镜像。
+
 ### 单系统安装
 
 该方式会覆盖 `userdata` 并删除 Android 用户数据，不需要单独的 `linux` 分区：
@@ -186,6 +192,8 @@ Android 槽的 DTBO。
 adb reboot bootloader
 fastboot devices
 fastboot getvar current-slot
+
+fastboot --disable-verity --disable-verification flash vbmeta vbmeta.img
 
 LINUX_SLOT=b
 BOOT=caihong-boot-userdata-<kernel-release>.img

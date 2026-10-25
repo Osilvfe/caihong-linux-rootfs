@@ -167,6 +167,8 @@ instead when that is the slot reserved for Linux:
 fastboot devices
 fastboot getvar current-slot
 
+fastboot --disable-verity --disable-verification flash vbmeta vbmeta.img
+
 LINUX_SLOT=b
 BOOT=caihong-boot-linux-<kernel-release>.img
 ROOTFS=caihong-rootfs.ext4.sparse.img
@@ -181,6 +183,11 @@ fastboot reboot
 Erase only the DTBO belonging to the selected Linux slot. The Caihong DTB is
 already inside the boot image; keep the Android slot's DTBO intact.
 
+Disable Android Verified Boot before booting Caihong. Use the matching
+`vbmeta.img` from the device's official Android factory image and flash it with
+`--disable-verity --disable-verification`. If this step is skipped, the
+bootloader may reject the custom boot image.
+
 ### Single system
 
 This overwrites `userdata` and deletes Android user data. It does not require a
@@ -190,6 +197,8 @@ separate `linux` partition:
 adb reboot bootloader
 fastboot devices
 fastboot getvar current-slot
+
+fastboot --disable-verity --disable-verification flash vbmeta vbmeta.img
 
 LINUX_SLOT=b
 BOOT=caihong-boot-userdata-<kernel-release>.img
