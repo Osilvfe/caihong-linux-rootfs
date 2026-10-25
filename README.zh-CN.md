@@ -60,9 +60,9 @@ Release 说明会记录每个资产、重组后 zstd 压缩流和解压后可刷
 
 ## 实验性 Armada rootfs
 
-`Build experimental Caihong Armada rootfs` 工作流会生成独立的
-`caihong-armada-rootfs-<kernel-release>.ext4.sparse.img.zst` 产物。该镜像
-只在 GitHub ARM64 runner 上构建，不会替换普通的 `caihong-rootfs-*` 发布镜像。
+统一发布工作流会在 GitHub ARM64 runner 上同时构建普通的
+`caihong-rootfs-*` 和实验性 `caihong-armada-rootfs-*` 镜像。两个 rootfs
+构建任务并行执行；CI 源码检查保持独立。
 
 镜像直接使用上游
 [`ghcr.io/armada-os/armada:stable`](https://github.com/armada-os/armada)
@@ -309,10 +309,9 @@ sudo -E env CHROOT_TOOL=chroot MODULE_TREE="$PWD/modules-current" \
 ```
 
 GitHub Actions 使用原生 AArch64 构建，并在不同运行之间保存 ccache。每个
-Release 说明都会记录实际使用的各组件提交。
-实验性 Armada 镜像需要在 Actions 页面单独运行
-`Build experimental Caihong Armada rootfs`；artifact 名称以
-`caihong-armada-` 开头，rootfs 文件名以 `caihong-armada-rootfs-` 开头。
+Release 说明都会记录实际使用的各组件提交。统一发布工作流会并行构建两份
+rootfs；Armada artifact 名称以 `caihong-armada-` 开头，rootfs 文件名以
+`caihong-armada-rootfs-` 开头。
 
 ## 许可证
 

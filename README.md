@@ -53,10 +53,10 @@ used for installable assets.
 
 ## Experimental Armada rootfs
 
-The `Build experimental Caihong Armada rootfs` workflow produces a separate
-`caihong-armada-rootfs-<kernel-release>.ext4.sparse.img.zst` artifact. It is
-built only on a GitHub ARM64 runner and does not replace the regular
-`caihong-rootfs-*` release.
+The unified release workflow builds both the regular
+`caihong-rootfs-*` and experimental `caihong-armada-rootfs-*` images on a
+GitHub ARM64 runner. The two rootfs build jobs run in parallel; CI source
+validation remains separate.
 
 The image is assembled directly from the upstream
 [`ghcr.io/armada-os/armada:stable`](https://github.com/armada-os/armada)
@@ -320,10 +320,9 @@ sudo -E env CHROOT_TOOL=chroot MODULE_TREE="$PWD/modules-current" \
 
 GitHub Actions performs native AArch64 builds and persists ccache between
 runs. Every Release description records the resolved component commits.
-The experimental Armada image is built separately from the Actions page by
-running `Build experimental Caihong Armada rootfs`; its artifact name starts
-with `caihong-armada-` and its rootfs filename starts with
-`caihong-armada-rootfs-`.
+The unified release workflow builds both rootfs images in parallel; its
+artifact name starts with `caihong-armada-` and its rootfs filename starts
+with `caihong-armada-rootfs-`.
 
 ## Licensing
 

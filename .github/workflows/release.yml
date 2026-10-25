@@ -1,4 +1,4 @@
-name: Build and publish Caihong Linux
+name: Build and publish Caihong Linux releases
 
 on:
   push:
@@ -18,19 +18,22 @@ on:
 
 permissions:
   contents: write
+  packages: read
 
 concurrency:
   group: caihong-release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  release:
+  build-kernel:
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 360
     env:
       CCACHE_BASEDIR: ${{ github.workspace }}
       CCACHE_COMPILERCHECK: content
       CCACHE_DIR: ${{ github.workspace }}/.ccache
+    outputs:
+      kernel_release: ${{ steps.build-kernel.outputs.kernel_release }}
     steps:
       - uses: actions/checkout@v4
 
@@ -70,16 +73,21 @@ jobs:
           ccache --set-config=compression_level=6
           ccache --zero-stats
 
-      - name: Build direct-root kernel and boot image
+      - name: Build direct-root kernel and update payload
+        id: build-kernel
         run: |
           jobs=$(nproc)
           JOBS=$jobs ZSTD_THREADS=$jobs FORCE=1 \
             KERNEL_CC="ccache gcc" KERNEL_HOSTCC="ccache gcc" \
-            scripts/build-kernel-release.sh
+          scripts/build-kernel-release.sh
           scripts/build-linux-caihong-package.sh
           scripts/build-linux-caihong-rpm.sh modules-current release
           DISTRIBUTION=archlinuxarm scripts/build-caihong-platform-package.sh release
+          DISTRIBUTION=armada scripts/build-caihong-platform-package.sh release
           scripts/build-caihong-npu-package.sh release
+          LIBDIR=lib64 scripts/build-caihong-npu-package.sh release
+          kernel_release=$(cat release/KERNEL_RELEASE)
+          printf 'kernel_release=%s\n' "$kernel_release" >> "$GITHUB_OUTPUT"
 
       - name: Show compiler cache statistics
         if: always()
@@ -94,13 +102,107 @@ jobs:
       - name: Free kernel build space
         run: rm -rf .ccache linux build/linux
 
-      - name: Build matching Arch Linux ARM rootfs
+      - name: Upload kernel and update payload
+        uses: actions/upload-artifact@v4
+        with:
+          name: caihong-build-inputs-${{ github.run_id }}
+          path: |
+            release
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+      - name: Upload resolved dependencies
+        uses: actions/upload-artifact@v4
+        with:
+          name: caihong-dependencies-${{ github.run_id }}
+          path: build/dependencies.resolved.env
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Upload matching module tree
+        uses: actions/upload-artifact@v4
+        with:
+          name: caihong-modules-${{ github.run_id }}
+          path: modules-current
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  build-rootfs:
+    name: Build ${{ matrix.distribution == 'archlinuxarm' && 'Arch Linux ARM' || 'Armada' }} rootfs
+    runs-on: ubuntu-24.04-arm
+    needs: build-kernel
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        distribution: [archlinuxarm, armada]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install host dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            alsa-utils android-sdk-libsparse-utils bc bison build-essential \
+            ccache curl dwarves e2fsprogs flex git kmod libarchive-tools \
+            libelf-dev libssl-dev python3 rsync shellcheck zstd
+
+      - name: Restore package downloads
+        if: matrix.distribution == 'archlinuxarm'
+        uses: actions/cache@v4
+        with:
+          path: |
+            downloads
+            build/pacman-cache
+          key: archlinuxarm-${{ runner.os }}-${{ hashFiles('dependencies.env', 'scripts/package-archlinuxarm-rootfs.sh') }}
+          restore-keys: archlinuxarm-${{ runner.os }}-
+
+      - name: Install Armada dependencies
+        if: matrix.distribution == 'armada'
+        run: |
+          sudo apt-get install -y m4 meson ninja-build skopeo umoci
+
+      - name: Resolve component branches
+        run: scripts/checkout-dependencies.sh
+
+      - name: Download build inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: caihong-build-inputs-${{ github.run_id }}
+          path: release
+
+      - name: Download resolved dependencies
+        uses: actions/download-artifact@v4
+        with:
+          name: caihong-dependencies-${{ github.run_id }}
+          path: build
+
+      - name: Download matching module tree
+        uses: actions/download-artifact@v4
+        with:
+          name: caihong-modules-${{ github.run_id }}
+          path: modules-current
+
+      - name: Restore build inputs
+        run: |
+          sudo chown -R "$USER:$USER" release
+          chmod -R u+rwX release
+          kernel_release=$(cat release/KERNEL_RELEASE)
+          test "$kernel_release" = "${{ needs.build-kernel.outputs.kernel_release }}"
+          test -d "modules-current/lib/modules/$kernel_release"
+
+      - name: Build Arch Linux ARM rootfs
+        if: matrix.distribution == 'archlinuxarm'
         run: |
           jobs=$(nproc)
           kernel_release=$(cat release/KERNEL_RELEASE)
           sudo -E env \
             CHROOT_TOOL=chroot \
             KERNEL_PACKAGE="$PWD/release/$(cat release/LINUX_CAIHONG_PACKAGE)" \
+            CAIHONG_PLATFORM_PACKAGE="$PWD/release/$(cat release/CAIHONG_PLATFORM_PACKAGE)" \
+            CAIHONG_NPU_PACKAGE="$PWD/release/$(cat release/CAIHONG_NPU_PACKAGE)" \
             LIBCAMERA_BUILD_JOBS="$jobs" \
             MODULE_TREE="$PWD/modules-current" \
             OUTPUT_FORMAT=ext4 \
@@ -111,7 +213,72 @@ jobs:
             "release/caihong-rootfs-$kernel_release.ext4.sparse.img"
           sudo chown -R "$USER:$USER" release build/pacman-cache downloads
 
-      - name: Prepare release assets
+      - name: Build Armada rootfs
+        if: matrix.distribution == 'armada'
+        run: |
+          kernel_release=$(cat release/KERNEL_RELEASE)
+          sudo -E env \
+            ARMADA_IMAGE=ghcr.io/armada-os/armada:stable \
+            MODULE_TREE="$PWD/modules-current" \
+            RELEASE_DIR="$PWD/release" \
+            KERNEL_RPM="$PWD/release/$(cat release/LINUX_CAIHONG_RPM)" \
+            CAIHONG_PLATFORM_PACKAGE="$PWD/release/$(cat release/CAIHONG_PLATFORM_PACKAGE)" \
+            CAIHONG_NPU_PACKAGE="$PWD/release/$(cat release/CAIHONG_NPU_PACKAGE)" \
+            SPARSE_IMAGE=1 \
+            scripts/package-armada-rootfs.sh \
+            "release/caihong-armada-rootfs-$kernel_release.ext4.sparse.img"
+          sudo chown -R "$USER:$USER" release
+
+      - name: Upload rootfs build
+        uses: actions/upload-artifact@v4
+        with:
+          name: caihong-rootfs-build-${{ matrix.distribution }}-${{ github.run_id }}
+          path: |
+            release/caihong-rootfs-*.ext4.sparse.img
+            release/caihong-armada-rootfs-*.ext4.sparse.img
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  publish:
+    runs-on: ubuntu-24.04-arm
+    needs: [build-kernel, build-rootfs]
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install release dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3 zstd
+
+      - name: Download build inputs
+        uses: actions/download-artifact@v4
+        with:
+          name: caihong-build-inputs-${{ github.run_id }}
+          path: release
+
+      - name: Restore release permissions
+        run: |
+          sudo chown -R "$USER:$USER" release
+          chmod -R u+rwX release
+
+      - name: Download Arch rootfs
+        uses: actions/download-artifact@v4
+        with:
+          name: caihong-rootfs-build-archlinuxarm-${{ github.run_id }}
+          path: release
+
+      - name: Download Armada rootfs
+        uses: actions/download-artifact@v4
+        with:
+          name: caihong-rootfs-build-armada-${{ github.run_id }}
+          path: release
+
+      - name: Restore rootfs permissions
+        run: chmod -R u+rwX release
+
+      - name: Prepare Arch release assets
         run: |
           kernel_release=$(cat release/KERNEL_RELEASE)
           scripts/prepare-release-assets.py \
@@ -120,6 +287,42 @@ jobs:
             --dependencies build/dependencies.resolved.env \
             --assets release/assets \
             --notes release/RELEASE_NOTES.md \
+            --manifest release/arch-release-manifest.json \
+            --checksums release/SHA256SUMS.arch
+
+      - name: Prepare Armada release assets
+        run: |
+          kernel_release=$(cat release/KERNEL_RELEASE)
+          scripts/prepare-release-assets.py \
+            --release-dir release \
+            --rootfs "release/caihong-armada-rootfs-$kernel_release.ext4.sparse.img" \
+            --dependencies build/dependencies.resolved.env \
+            --assets release/armada-assets \
+            --notes release/ARMADA_NOTES.md \
+            --manifest release/armada-release-manifest.json \
+            --checksums release/SHA256SUMS.armada
+          cp release/armada-release-manifest.json \
+            release/armada-assets/caihong-armada-release-manifest.json
+          cp release/ARMADA_NOTES.md release/armada-assets/
+          cp release/$(cat release/LINUX_CAIHONG_RPM) release/armada-assets/
+          cp release/armada-release-manifest.json release/armada-assets/
+
+      - name: Upload full release bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: caihong-release-${{ github.run_id }}
+          path: |
+            release/assets/*
+            release/armada-assets/*
+            release/arch-release-manifest.json
+            release/armada-release-manifest.json
+            release/RELEASE_NOTES.md
+            release/ARMADA_NOTES.md
+            release/SHA256SUMS.arch
+            release/SHA256SUMS.armada
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
 
       - name: Publish GitHub release
         if: github.event_name == 'push' || inputs.publish_release
@@ -135,13 +338,17 @@ jobs:
           fi
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" release/assets/* --clobber
+            gh release upload "$tag" release/armada-assets/* --clobber
             declare -A current_assets=()
             for path in release/assets/*; do
               current_assets["${path##*/}"]=1
             done
+            for path in release/armada-assets/*; do
+              current_assets["${path##*/}"]=1
+            done
             while IFS= read -r asset; do
               case "$asset" in
-                caihong-boot-*|caihong-rootfs-*|linux-caihong-*|caihong-platform-*|caihong-npu-*)
+                caihong-boot-*|caihong-rootfs-*|caihong-armada-rootfs-*|linux-caihong-*|caihong-platform-*|caihong-npu-*|caihong-armada-release-manifest.json|arch-release-manifest.json|armada-release-manifest.json|SHA256SUMS.arch|SHA256SUMS.armada|ARMADA_NOTES.md)
                   if [[ -z ${current_assets[$asset]+present} ]]; then
                     gh release delete-asset "$tag" "$asset" --yes
                   fi
@@ -152,63 +359,7 @@ jobs:
               --title "Caihong Linux $tag" \
               --notes-file release/RELEASE_NOTES.md
           else
-            gh release create "$tag" release/assets/* \
+            gh release create "$tag" release/assets/* release/armada-assets/* \
               --title "Caihong Linux $tag" \
               --notes-file release/RELEASE_NOTES.md
           fi
-
-      - name: Upload boot artifacts
-        if: github.event_name == 'workflow_dispatch' && !inputs.publish_release
-        uses: actions/upload-artifact@v4
-        with:
-          name: caihong-boot-${{ github.run_id }}
-          path: |
-            release/assets/caihong-boot-linux-*.img
-            release/assets/caihong-boot-userdata-*.img
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 3
-
-      - name: Upload kernel package artifacts
-        if: github.event_name == 'workflow_dispatch' && !inputs.publish_release
-        uses: actions/upload-artifact@v4
-        with:
-          name: caihong-kernel-package-${{ github.run_id }}
-          path: |
-            release/assets/linux-caihong-*-aarch64.pkg.tar.zst
-            release/assets/linux-caihong-*-1.aarch64.rpm
-
-      - name: Upload device component artifacts
-        if: github.event_name == 'workflow_dispatch' && !inputs.publish_release
-        uses: actions/upload-artifact@v4
-        with:
-          name: caihong-device-components-${{ github.run_id }}
-          path: |
-            release/assets/caihong-platform-*
-            release/assets/caihong-npu-*
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 3
-
-      - name: Upload rootfs artifacts
-        if: github.event_name == 'workflow_dispatch' && !inputs.publish_release
-        uses: actions/upload-artifact@v4
-        with:
-          name: caihong-rootfs-${{ github.run_id }}
-          path: release/assets/caihong-rootfs-*
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 3
-
-      - name: Upload release metadata
-        if: github.event_name == 'workflow_dispatch' && !inputs.publish_release
-        uses: actions/upload-artifact@v4
-        with:
-          name: caihong-metadata-${{ github.run_id }}
-          path: |
-            release/release-manifest.json
-            release/RELEASE_NOTES.md
-            release/SHA256SUMS
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 3

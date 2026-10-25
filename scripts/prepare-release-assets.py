@@ -299,6 +299,8 @@ def main() -> int:
     parser.add_argument("--dependencies", type=Path, required=True)
     parser.add_argument("--assets", type=Path, required=True)
     parser.add_argument("--notes", type=Path, required=True)
+    parser.add_argument("--manifest", type=Path)
+    parser.add_argument("--checksums", type=Path)
     args = parser.parse_args()
 
     release_dir = args.release_dir.resolve()
@@ -413,9 +415,11 @@ def main() -> int:
         "bytes": npu_package.stat().st_size,
         "sha256": asset_hashes[npu_package.name],
     }
-    manifest_path = release_dir / "release-manifest.json"
+    manifest_path = args.manifest or release_dir / "release-manifest.json"
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
-    sums = release_dir / "SHA256SUMS"
+    sums = args.checksums or release_dir / "SHA256SUMS"
+    sums.parent.mkdir(parents=True, exist_ok=True)
     sums.write_text(
         "".join(f"{asset_hashes[path.name]}  {path.name}\n" for path in copied)
     )

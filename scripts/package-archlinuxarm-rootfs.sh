@@ -13,6 +13,8 @@ mirror=${mirror%/}
 package_cache=${PACKAGE_CACHE:-"$project_dir/build/pacman-cache"}
 ssc_bundle=${SSC_BUNDLE:-"$project_dir/firmware-assets/caihong-ssc"}
 npu_bundle=${NPU_BUNDLE:-"$project_dir/firmware-assets/caihong-npu"}
+platform_package=${CAIHONG_PLATFORM_PACKAGE:-}
+npu_package=${CAIHONG_NPU_PACKAGE:-}
 output_format=${OUTPUT_FORMAT:-ext4}
 image_size_gib=${IMAGE_SIZE_GIB:-}
 image_min_free_mib=${IMAGE_MIN_FREE_MIB:-2048}
@@ -68,6 +70,26 @@ if [[ ! -d $npu_bundle ]]; then
 	exit 1
 fi
 npu_bundle=$(cd -- "$npu_bundle" && pwd)
+if [[ -z $platform_package && -f $project_dir/release/CAIHONG_PLATFORM_PACKAGE ]]; then
+	platform_package=$project_dir/release/$(<"$project_dir/release/CAIHONG_PLATFORM_PACKAGE")
+fi
+if [[ -z $npu_package && -f $project_dir/release/CAIHONG_NPU_PACKAGE ]]; then
+	npu_package=$project_dir/release/$(<"$project_dir/release/CAIHONG_NPU_PACKAGE")
+fi
+if [[ -n $platform_package ]]; then
+	platform_package=$(cd -- "$(dirname -- "$platform_package")" && pwd)/${platform_package##*/}
+	[[ -f $platform_package ]] || {
+		echo "platform package not found: $platform_package" >&2
+		exit 1
+	}
+fi
+if [[ -n $npu_package ]]; then
+	npu_package=$(cd -- "$(dirname -- "$npu_package")" && pwd)/${npu_package##*/}
+	[[ -f $npu_package ]] || {
+		echo "NPU package not found: $npu_package" >&2
+		exit 1
+	}
+fi
 
 # This is intentionally a native AArch64 development environment.  base-devel
 # provides GCC, binutils, make, pkgconf and the normal Arch package build tools;
@@ -570,8 +592,24 @@ install -D -m 0644 "$project_dir/tools/caihong-npu-info.c" \
 	/tmp/caihong-npu-info.c -ldl
 rm -f -- "$rootfs/tmp/caihong-npu-info.c"
 
-echo "installing the Caihong NPU self-test runtime"
-"$project_dir/scripts/install-caihong-npu.sh" "$npu_bundle" "$rootfs" lib
+echo "installing packaged Caihong update payloads"
+install -d -m 0755 "$rootfs/tmp/caihong-packages"
+if [[ -n $platform_package ]]; then
+	install -m 0644 "$platform_package" \
+		"$rootfs/tmp/caihong-packages/$(<"$project_dir/release/CAIHONG_PLATFORM_PACKAGE")"
+fi
+if [[ -n $npu_package ]]; then
+	install -m 0644 "$npu_package" \
+		"$rootfs/tmp/caihong-packages/$(<"$project_dir/release/CAIHONG_NPU_PACKAGE")"
+fi
+if [[ -n $platform_package ]]; then
+	"$project_dir/packaging/caihong-platform/install-caihong-platform" \
+		"$rootfs/tmp/caihong-packages/$(<"$project_dir/release/CAIHONG_PLATFORM_PACKAGE")"
+fi
+if [[ -n $npu_package ]]; then
+	"$project_dir/packaging/caihong-platform/install-caihong-platform" \
+		"$rootfs/tmp/caihong-packages/$(<"$project_dir/release/CAIHONG_NPU_PACKAGE")"
+fi
 
 echo "building and installing qbootctl"
 if [[ ! -f $project_dir/external/qbootctl/meson.build ]]; then
@@ -616,6 +654,7 @@ if ! "$chroot_tool" "$rootfs" "${chroot_env[@]}" \
 	exit 1
 fi
 rm -f -- "$rootfs/tmp/linux-caihong.pkg.tar.zst"
+rm -rf -- "$rootfs/tmp/caihong-packages"
 "$project_dir/scripts/install-caihong-adbd.sh" "$rootfs"
 
 rm -f -- "$rootfs/usr/bin/qemu-aarch64-static"

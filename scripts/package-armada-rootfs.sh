@@ -15,6 +15,9 @@ module_tree=${MODULE_TREE:-"$project_dir/modules-current"}
 release_dir=${RELEASE_DIR:-"$project_dir/release"}
 ssc_bundle=${SSC_BUNDLE:-"$project_dir/firmware-assets/caihong-ssc"}
 npu_bundle=${NPU_BUNDLE:-"$project_dir/firmware-assets/caihong-npu"}
+platform_package=${CAIHONG_PLATFORM_PACKAGE:-}
+npu_package=${CAIHONG_NPU_PACKAGE:-}
+kernel_rpm=${KERNEL_RPM:-}
 image_min_free_mib=${IMAGE_MIN_FREE_MIB:-2048}
 image_slack_percent=${IMAGE_SLACK_PERCENT:-25}
 sparse_image=${SPARSE_IMAGE:-1}
@@ -47,6 +50,28 @@ done
 [[ -f $release_dir/KERNEL_RELEASE ]] || fail "missing release/KERNEL_RELEASE"
 [[ -f $project_dir/external/qbootctl/meson.build ]] || \
 	fail "missing qbootctl source; run scripts/checkout-dependencies.sh"
+[[ -f $release_dir/CAIHONG_PLATFORM_PACKAGE ]] || \
+	fail "missing release/CAIHONG_PLATFORM_PACKAGE"
+[[ -f $release_dir/CAIHONG_NPU_PACKAGE ]] || \
+	fail "missing release/CAIHONG_NPU_PACKAGE"
+
+resolve_input()
+{
+	local input=$1 label=$2
+	if [[ -n $input ]]; then
+		input=$(cd -- "$(dirname -- "$input")" && pwd)/${input##*/}
+		[[ -f $input ]] || fail "$label not found: $input"
+	fi
+	printf '%s\n' "$input"
+}
+
+platform_package=$(resolve_input "$platform_package" platform package)
+npu_package=$(resolve_input "$npu_package" NPU package)
+kernel_rpm=$(resolve_input "$kernel_rpm" kernel RPM)
+[[ -n $platform_package ]] || \
+	platform_package=$release_dir/$(<"$release_dir/CAIHONG_PLATFORM_PACKAGE")
+[[ -n $npu_package ]] || \
+	npu_package=$release_dir/$(<"$release_dir/CAIHONG_NPU_PACKAGE")
 
 kernel_release=$(<"$release_dir/KERNEL_RELEASE")
 [[ -d $module_tree/lib/modules/$kernel_release ]] || \
@@ -205,6 +230,21 @@ elif [[ ! -x $rootfs/usr/bin/resize2fs ]]; then
 	fail "Armada image does not contain resize2fs"
 fi
 
+echo "building Caihong hardware-address reader"
+install -d -m 0755 "$rootfs/usr/local/libexec"
+cc -O2 -Wall -Wextra -Werror \
+	-o "$rootfs/usr/local/libexec/caihong-nvram-mac" \
+	"$project_dir/tools/caihong-nvram-mac.c" -lcrypto
+file "$rootfs/usr/local/libexec/caihong-nvram-mac" | grep -q 'ARM aarch64' || \
+	fail "Caihong hardware-address reader is not AArch64"
+
+echo "building Caihong NPU capability probe"
+cc -O2 -Wall -Wextra -Werror \
+	-o "$rootfs/usr/local/sbin/caihong-npu-info" \
+	"$project_dir/tools/caihong-npu-info.c" -ldl
+file "$rootfs/usr/local/sbin/caihong-npu-info" | grep -q 'ARM aarch64' || \
+	fail "Caihong NPU capability probe is not AArch64"
+
 echo "installing Caihong firmware and AudioReach topology"
 (cd "$project_dir/firmware" && sha256sum -c SHA256SUMS)
 install -d -m 0755 "$rootfs/usr/lib/firmware"
@@ -224,6 +264,36 @@ CAIHONG_EXPECTED_RELEASE="$kernel_release" \
 rm -f -- "$rootfs/usr/local/lib/caihong/caihong_pen_power.ko"
 "$project_dir/scripts/install-caihong-adbd.sh" "$rootfs"
 
+echo "installing packaged Caihong update payloads"
+install -d -m 0755 "$rootfs/tmp/caihong-packages"
+if [[ -n $platform_package ]]; then
+	install -m 0644 "$platform_package" \
+		"$rootfs/tmp/caihong-packages/$(<"$project_dir/release/CAIHONG_PLATFORM_PACKAGE")"
+fi
+if [[ -n $npu_package ]]; then
+	install -m 0644 "$npu_package" \
+		"$rootfs/tmp/caihong-packages/$(<"$project_dir/release/CAIHONG_NPU_PACKAGE")"
+fi
+if [[ -n $platform_package ]]; then
+	"$project_dir/packaging/caihong-platform/install-caihong-platform" \
+		"$rootfs/tmp/caihong-packages/$(<"$project_dir/release/CAIHONG_PLATFORM_PACKAGE")"
+fi
+if [[ -n $npu_package ]]; then
+	"$project_dir/packaging/caihong-platform/install-caihong-platform" \
+		"$rootfs/tmp/caihong-packages/$(<"$project_dir/release/CAIHONG_NPU_PACKAGE")"
+fi
+
+if [[ -n $kernel_rpm ]]; then
+	install -m 0644 "$kernel_rpm" "$rootfs/tmp/linux-caihong.rpm"
+	chroot "$rootfs" /usr/bin/env -i \
+		HOME=/root LANG=C PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+		/usr/bin/dnf5 -y install /tmp/linux-caihong.rpm
+	chroot "$rootfs" rpm -q linux-caihong >/dev/null || \
+		fail "linux-caihong RPM was not registered"
+	rm -f -- "$rootfs/tmp/linux-caihong.rpm"
+fi
+rm -rf -- "$rootfs/tmp/caihong-packages"
+
 echo "installing Caihong boot payload metadata"
 install -d -m 0755 "$rootfs/usr/lib/linux-caihong"
 install -m 0644 "$image_file" "$rootfs/usr/lib/linux-caihong/Image"
@@ -233,24 +303,6 @@ install -m 0644 "$boot_userdata" "$rootfs/usr/lib/linux-caihong/boot-userdata.im
 install -m 0755 "$project_dir/packaging/linux-caihong/install-current-slot" \
 	"$rootfs/usr/lib/linux-caihong/install-current-slot"
 printf '%s\n' "$kernel_release" > "$rootfs/usr/lib/linux-caihong/kernel-release"
-
-echo "building Caihong hardware-address reader"
-install -d -m 0755 "$rootfs/usr/local/libexec"
-cc -O2 -Wall -Wextra -Werror \
-	-o "$rootfs/usr/local/libexec/caihong-nvram-mac" \
-	"$project_dir/tools/caihong-nvram-mac.c" -lcrypto
-file "$rootfs/usr/local/libexec/caihong-nvram-mac" | grep -q 'ARM aarch64' || \
-	fail "Caihong hardware-address reader is not AArch64"
-
-echo "building Caihong NPU capability probe"
-cc -O2 -Wall -Wextra -Werror \
-	-o "$rootfs/usr/local/sbin/caihong-npu-info" \
-	"$project_dir/tools/caihong-npu-info.c" -ldl
-file "$rootfs/usr/local/sbin/caihong-npu-info" | grep -q 'ARM aarch64' || \
-	fail "Caihong NPU capability probe is not AArch64"
-
-echo "installing the Caihong NPU self-test runtime"
-"$project_dir/scripts/install-caihong-npu.sh" "$npu_bundle" "$rootfs" lib64
 
 echo "building qbootctl"
 qbootctl_build="$work_dir/qbootctl-build"
