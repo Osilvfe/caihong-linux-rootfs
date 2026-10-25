@@ -361,7 +361,6 @@ def main() -> int:
     names = [
         f"caihong-boot-linux-{kernel_release}.img",
         f"caihong-boot-userdata-{kernel_release}.img",
-        kernel_package_name,
     ]
     package_pointers = {
         "archlinuxarm": (
@@ -377,9 +376,12 @@ def main() -> int:
     platform_package = resolve_package_pointer(release_dir, platform_pointer)
     npu_package = resolve_package_pointer(release_dir, npu_pointer)
     npu_packages = [npu_package]
+    if args.distribution == "archlinuxarm":
+        names.append(kernel_package_name)
+    else:
+        names.append(rpm_package_name)
     names.extend(
         (
-            rpm_package_name,
             platform_package.name,
             *(npu_package.name for npu_package in npu_packages),
         )
@@ -416,11 +418,6 @@ def main() -> int:
         "distribution": args.distribution,
         "kernel_release": kernel_release,
         "boot": boot_manifests,
-        "pacman_package": {
-            "name": kernel_package_name,
-            "bytes": kernel_package.stat().st_size,
-            "sha256": asset_hashes[kernel_package_name],
-        },
         "rootfs": {
             **rootfs_metadata,
             "image_name": rootfs.name,
@@ -437,11 +434,18 @@ def main() -> int:
         },
         "dependencies": dependencies,
     }
-    manifest["kernel_rpm_package"] = {
-        "name": rpm_package_name,
-        "bytes": rpm_package.stat().st_size,
-        "sha256": asset_hashes[rpm_package_name],
-    }
+    if args.distribution == "archlinuxarm":
+        manifest["pacman_package"] = {
+            "name": kernel_package_name,
+            "bytes": kernel_package.stat().st_size,
+            "sha256": asset_hashes[kernel_package_name],
+        }
+    else:
+        manifest["kernel_rpm_package"] = {
+            "name": rpm_package_name,
+            "bytes": rpm_package.stat().st_size,
+            "sha256": asset_hashes[rpm_package_name],
+        }
     manifest["platform_package"] = {
         "name": platform_package.name,
         "bytes": platform_package.stat().st_size,

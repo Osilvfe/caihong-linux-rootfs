@@ -102,32 +102,19 @@ jobs:
       - name: Free kernel build space
         run: rm -rf .ccache linux build/linux
 
-      - name: Upload kernel and update payload
-        uses: actions/upload-artifact@v4
+      - name: Cache kernel and update payload
+        uses: actions/cache/save@v4
         with:
-          name: caihong-build-inputs-${{ github.run_id }}
+          key: caihong-build-inputs-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             release
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 1
+            build/dependencies.resolved.env
 
-      - name: Upload resolved dependencies
-        uses: actions/upload-artifact@v4
+      - name: Cache matching module tree
+        uses: actions/cache/save@v4
         with:
-          name: caihong-dependencies-${{ github.run_id }}
-          path: build/dependencies.resolved.env
-          if-no-files-found: error
-          retention-days: 1
-
-      - name: Upload matching module tree
-        uses: actions/upload-artifact@v4
-        with:
-          name: caihong-modules-${{ github.run_id }}
+          key: caihong-modules-${{ github.run_id }}-${{ github.run_attempt }}
           path: modules-current
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 1
 
   build-rootfs:
     name: Build ${{ matrix.distribution == 'archlinuxarm' && 'Arch Linux ARM' || 'Armada' }} rootfs
@@ -167,23 +154,21 @@ jobs:
       - name: Resolve component branches
         run: scripts/checkout-dependencies.sh
 
-      - name: Download build inputs
-        uses: actions/download-artifact@v4
+      - name: Restore build inputs
+        uses: actions/cache/restore@v4
         with:
-          name: caihong-build-inputs-${{ github.run_id }}
-          path: release
+          key: caihong-build-inputs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            release
+            build/dependencies.resolved.env
+          fail-on-cache-miss: true
 
-      - name: Download resolved dependencies
-        uses: actions/download-artifact@v4
+      - name: Restore matching module tree
+        uses: actions/cache/restore@v4
         with:
-          name: caihong-dependencies-${{ github.run_id }}
-          path: build
-
-      - name: Download matching module tree
-        uses: actions/download-artifact@v4
-        with:
-          name: caihong-modules-${{ github.run_id }}
+          key: caihong-modules-${{ github.run_id }}-${{ github.run_attempt }}
           path: modules-current
+          fail-on-cache-miss: true
 
       - name: Restore build inputs
         run: |
@@ -229,16 +214,11 @@ jobs:
             "release/caihong-armada-rootfs-$kernel_release.ext4.sparse.img"
           sudo chown -R "$USER:$USER" release
 
-      - name: Upload rootfs build
-        uses: actions/upload-artifact@v4
+      - name: Cache rootfs build
+        uses: actions/cache/save@v4
         with:
-          name: caihong-rootfs-build-${{ matrix.distribution }}-${{ github.run_id }}
-          path: |
-            release/caihong-rootfs-*.ext4.sparse.img
-            release/caihong-armada-rootfs-*.ext4.sparse.img
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 1
+          key: caihong-rootfs-${{ matrix.distribution }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release/*rootfs-*.ext4.sparse.img
 
   publish:
     runs-on: ubuntu-24.04-arm
@@ -252,34 +232,33 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y python3 zstd
 
-      - name: Download build inputs
-        uses: actions/download-artifact@v4
+      - name: Restore build inputs
+        uses: actions/cache/restore@v4
         with:
-          name: caihong-build-inputs-${{ github.run_id }}
-          path: release
-
-      - name: Download resolved dependencies
-        uses: actions/download-artifact@v4
-        with:
-          name: caihong-dependencies-${{ github.run_id }}
-          path: build
+          key: caihong-build-inputs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            release
+            build/dependencies.resolved.env
+          fail-on-cache-miss: true
 
       - name: Restore release permissions
         run: |
           sudo chown -R "$USER:$USER" release
           chmod -R u+rwX release
 
-      - name: Download Arch rootfs
-        uses: actions/download-artifact@v4
+      - name: Restore Arch rootfs
+        uses: actions/cache/restore@v4
         with:
-          name: caihong-rootfs-build-archlinuxarm-${{ github.run_id }}
-          path: release
+          key: caihong-rootfs-archlinuxarm-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release/*rootfs-*.ext4.sparse.img
+          fail-on-cache-miss: true
 
-      - name: Download Armada rootfs
-        uses: actions/download-artifact@v4
+      - name: Restore Armada rootfs
+        uses: actions/cache/restore@v4
         with:
-          name: caihong-rootfs-build-armada-${{ github.run_id }}
-          path: release
+          key: caihong-rootfs-armada-${{ github.run_id }}-${{ github.run_attempt }}
+          path: release/*rootfs-*.ext4.sparse.img
+          fail-on-cache-miss: true
 
       - name: Restore rootfs permissions
         run: chmod -R u+rwX release
@@ -293,7 +272,7 @@ jobs:
             --rootfs "release/caihong-rootfs-$kernel_release.ext4.sparse.img" \
             --dependencies build/dependencies.resolved.env \
             --assets release/assets \
-            --notes release/RELEASE_NOTES.md \
+            --notes release/ARCH_NOTES.md \
             --manifest release/arch-release-manifest.json \
             --checksums release/SHA256SUMS.arch
 
@@ -310,28 +289,69 @@ jobs:
             --manifest release/armada-release-manifest.json \
             --checksums release/SHA256SUMS.armada
 
-      - name: Stage release metadata
+      - name: Assemble publishable release assets
         run: |
-          cp release/arch-release-manifest.json release/assets/
-          cp release/SHA256SUMS.arch release/assets/
-          cp release/armada-release-manifest.json \
-            release/armada-assets/caihong-armada-release-manifest.json
-          cp release/ARMADA_NOTES.md release/armada-assets/
-          cp release/SHA256SUMS.armada release/armada-assets/
+          set -euo pipefail
+          for source in release/armada-assets/*; do
+            target=release/assets/${source##*/}
+            if [[ -e $target ]]; then
+              case ${source##*/} in
+                caihong-boot-*.img) cmp "$source" "$target" ;;
+                *)
+                  echo "unexpected duplicate release asset: ${source##*/}" >&2
+                  exit 1
+                  ;;
+              esac
+              rm "$source"
+            else
+              mv "$source" "$target"
+            fi
+          done
+          rmdir release/armada-assets
+
+          shopt -s nullglob
+          boot=(release/assets/caihong-boot-*.img)
+          arch_rootfs=(release/assets/caihong-rootfs-*.ext4.sparse.img.zst*)
+          armada_rootfs=(release/assets/caihong-armada-rootfs-*.ext4.sparse.img.zst*)
+          pacman=(release/assets/linux-caihong-*-aarch64.pkg.tar.zst)
+          rpm=(release/assets/linux-caihong-*-1.aarch64.rpm)
+          platform=(release/assets/caihong-platform-*.tar.zst)
+          npu=(release/assets/caihong-npu-*.tar.zst)
+          (( ${#boot[@]} == 2 ))
+          (( ${#arch_rootfs[@]} >= 1 ))
+          (( ${#armada_rootfs[@]} >= 1 ))
+          (( ${#pacman[@]} == 1 ))
+          (( ${#rpm[@]} == 1 ))
+          (( ${#platform[@]} == 2 ))
+          (( ${#npu[@]} == 2 ))
+          for asset in release/assets/*; do
+            case ${asset##*/} in
+              caihong-boot-*.img|\
+              caihong-rootfs-*.ext4.sparse.img.zst*|\
+              caihong-armada-rootfs-*.ext4.sparse.img.zst*|\
+              linux-caihong-*-aarch64.pkg.tar.zst|\
+              linux-caihong-*-1.aarch64.rpm|\
+              caihong-platform-*.tar.zst|\
+              caihong-npu-*.tar.zst) ;;
+              *)
+                echo "unexpected published release asset: ${asset##*/}" >&2
+                exit 1
+                ;;
+            esac
+          done
+
+          {
+            printf '%s\n\n' '## Arch Linux ARM'
+            cat release/ARCH_NOTES.md
+            printf '\n%s\n\n' '## Armada'
+            cat release/ARMADA_NOTES.md
+          } > release/RELEASE_NOTES.md
 
       - name: Upload full release bundle
         uses: actions/upload-artifact@v4
         with:
           name: caihong-release-${{ github.run_id }}
-          path: |
-            release/assets/*
-            release/armada-assets/*
-            release/arch-release-manifest.json
-            release/armada-release-manifest.json
-            release/RELEASE_NOTES.md
-            release/ARMADA_NOTES.md
-            release/SHA256SUMS.arch
-            release/SHA256SUMS.armada
+          path: release/assets/*
           if-no-files-found: error
           compression-level: 0
           retention-days: 3
@@ -350,12 +370,8 @@ jobs:
           fi
           if gh release view "$tag" >/dev/null 2>&1; then
             gh release upload "$tag" release/assets/* --clobber
-            gh release upload "$tag" release/armada-assets/* --clobber
             declare -A current_assets=()
             for path in release/assets/*; do
-              current_assets["${path##*/}"]=1
-            done
-            for path in release/armada-assets/*; do
               current_assets["${path##*/}"]=1
             done
             while IFS= read -r asset; do
@@ -371,7 +387,7 @@ jobs:
               --title "Caihong Linux $tag" \
               --notes-file release/RELEASE_NOTES.md
           else
-            gh release create "$tag" release/assets/* release/armada-assets/* \
+            gh release create "$tag" release/assets/* \
               --title "Caihong Linux $tag" \
               --notes-file release/RELEASE_NOTES.md
           fi
