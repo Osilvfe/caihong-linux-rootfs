@@ -30,17 +30,27 @@ cleanup()
 }
 trap cleanup EXIT HUP INT TERM
 
-LIBDIR=$libdir "$project_dir/scripts/install-caihong-npu.sh" \
-	"$project_dir/firmware-assets/caihong-npu" "$stage" >/dev/null
+"$project_dir/scripts/install-caihong-npu.sh" \
+	"$project_dir/firmware-assets/caihong-npu" "$stage" "$libdir" >/dev/null
 
-install -d -m 0755 "$stage/etc/systemd/system/multi-user.target.wants"
-ln -sfn /usr/lib/systemd/system/caihong-ssc.service \
-	"$stage/etc/systemd/system/multi-user.target.wants/caihong-ssc.service"
+for path in \
+	libcdsprpc.so.1 \
+	caihong-npu/libcalculator.so \
+	caihong-npu/qnn/libQnnHtp.so \
+	caihong-npu/qnn/libQnnHtpPrepare.so \
+	caihong-npu/qnn/libQnnHtpV75Stub.so \
+	libQnnHtp.so \
+	libQnnHtpPrepare.so \
+	libQnnHtpV75Stub.so; do
+	if [ ! -e "$stage/usr/$libdir/$path" ] && [ ! -L "$stage/usr/$libdir/$path" ]; then
+		echo "NPU package is missing usr/$libdir/$path" >&2
+		exit 1
+	fi
+done
+
+install -d -m 0755 "$stage/etc"
 
 printf '%s\n' aarch64 > "$stage/usr/share/caihong-npu/architecture"
-install -D -m 0755 \
-	"$project_dir/packaging/caihong-platform/install-caihong-platform" \
-	"$stage/usr/libexec/caihong-platform/install-caihong-platform"
 install -d -m 0755 "$stage/usr/share/caihong-package"
 printf '%s\n' aarch64 > "$stage/usr/share/caihong-package/architecture"
 printf '%s\n' caihong-npu > "$stage/usr/share/caihong-package/package"
@@ -66,6 +76,11 @@ find "$stage" -xdev -type f -exec chmod go-w {} +
 bsdtar --uid 0 --gid 0 --uname root --gname root -cf - -C "$stage" manifest usr etc \
 	| zstd -q -19 -o "$temporary"
 mv "$temporary" "$output"
+case $libdir in
+	lib) pointer=CAIHONG_NPU_PACKAGE_LIB ;;
+	lib64) pointer=CAIHONG_NPU_PACKAGE_LIB64 ;;
+esac
+printf '%s\n' "${output##*/}" > "$release_dir/$pointer"
 printf '%s\n' "${output##*/}" > "$release_dir/CAIHONG_NPU_PACKAGE"
 sha256sum "$output"
 

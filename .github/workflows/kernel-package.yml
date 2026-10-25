@@ -31,8 +31,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            alsa-utils bc bison build-essential ccache curl dwarves flex git \
-            kmod libarchive-tools libelf-dev libssl-dev python3 rsync shellcheck zstd
+            alsa-utils bc bison build-essential ccache curl dwarves file flex git \
+            kmod libarchive-tools libelf-dev libssl-dev python3 rpm rsync shellcheck zstd
 
       - name: Resolve kernel dependencies
         run: DEPENDENCY_SCOPE=kernel scripts/checkout-dependencies.sh
@@ -59,11 +59,15 @@ jobs:
           JOBS=$jobs ZSTD_THREADS=$jobs FORCE=1 \
             KERNEL_CC="ccache gcc" KERNEL_HOSTCC="ccache gcc" \
             scripts/build-kernel-release.sh
+          scripts/build-linux-caihong-rpm.sh modules-current release
           DISTRIBUTION=archlinuxarm scripts/build-caihong-platform-package.sh release
           DISTRIBUTION=armada scripts/build-caihong-platform-package.sh release
           if [[ "${{ inputs.include_npu }}" == true ]]; then
             scripts/build-caihong-npu-package.sh release
             LIBDIR=lib64 scripts/build-caihong-npu-package.sh release
+            scripts/verify-caihong-update-packages.sh release
+          else
+            scripts/verify-caihong-update-packages.sh release --platform-only
           fi
           (
             cd release

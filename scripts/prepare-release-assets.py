@@ -47,6 +47,16 @@ def load_dependencies(path: Path) -> dict[str, str]:
     return result
 
 
+def resolve_package_pointer(release_dir: Path, pointer: str) -> Path:
+    name = (release_dir / pointer).read_text().strip()
+    if not name or Path(name).name != name:
+        raise RuntimeError(f"invalid package name in {pointer}: {name!r}")
+    package = release_dir / name
+    if not package.is_file():
+        raise RuntimeError(f"{pointer} references a missing package: {package}")
+    return package
+
+
 def inspect_android_sparse(path: Path) -> dict[str, int | str]:
     """Validate an Android sparse image and return release metadata."""
     with path.open("rb") as source:
@@ -147,6 +157,7 @@ def compress_zstd(source: Path, output: Path) -> None:
 
 def write_release_notes(
     path: Path,
+    distribution: str,
     kernel_release: str,
     assets: list[Path],
     asset_hashes: dict[str, str],
@@ -177,6 +188,30 @@ def write_release_notes(
         (asset for asset in assets if asset.name.endswith("-1.aarch64.rpm")),
         None,
     )
+    if not platform_package or not npu_package:
+        raise RuntimeError("release notes require platform and NPU packages")
+    if distribution == "archlinuxarm":
+        if not pacman_package:
+            raise RuntimeError("Arch release notes require a pacman kernel package")
+        update_instructions = f"""```sh
+sudo /usr/libexec/caihong-platform/install-caihong-platform \\
+  {platform_package.name}
+sudo pacman -U ./{pacman_package.name}
+sudo /usr/libexec/caihong-platform/install-caihong-platform \\
+  {npu_package.name}
+```"""
+    else:
+        if not rpm_package:
+            raise RuntimeError("Armada release notes require a kernel RPM")
+        update_instructions = f"""Armada is Fedora-based:
+
+```sh
+sudo /usr/libexec/caihong-platform/install-caihong-platform \\
+  {platform_package.name}
+sudo dnf install ./{rpm_package.name}
+sudo /usr/libexec/caihong-platform/install-caihong-platform \\
+  {npu_package.name}
+```"""
     source_lines = []
     for component in ("LINUX", "LIBCAMERA", "PLASMA_CAMERA", "QBOOTCTL", "MKBOOTIMG"):
         repository = dependencies.get(f"{component}_REPOSITORY")
@@ -262,23 +297,7 @@ Decompressed flashable rootfs SHA-256:
 After verifying the SHA-256 values below, install the device-only payloads
 without reflashing:
 
-```sh
-sudo /usr/libexec/caihong-platform/install-caihong-platform \\
-  {platform_package.name if platform_package else 'caihong-platform-archlinuxarm-<version>.tar.zst'}
-sudo pacman -U ./{pacman_package.name if pacman_package else 'linux-caihong-<version>-1-aarch64.pkg.tar.zst'}
-sudo /usr/libexec/caihong-platform/install-caihong-platform \\
-  {npu_package.name if npu_package else 'caihong-npu-<version>-lib.tar.zst'}
-```
-
-Armada is Fedora-based. Use the matching RPM instead:
-
-```sh
-sudo /usr/libexec/caihong-platform/install-caihong-platform \\
-  {platform_package.name if platform_package else 'caihong-platform-armada-<version>.tar.zst'}
-sudo dnf install ./{rpm_package.name if rpm_package else 'linux-caihong-<version>-1.aarch64.rpm'}
-sudo /usr/libexec/caihong-platform/install-caihong-platform \\
-  {npu_package.name if npu_package else 'caihong-npu-<version>-lib64.tar.zst'}
-```
+{update_instructions}
 
 ## Asset SHA-256
 
@@ -295,6 +314,9 @@ sudo /usr/libexec/caihong-platform/install-caihong-platform \\
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--release-dir", type=Path, required=True)
+    parser.add_argument(
+        "--distribution", choices=("archlinuxarm", "armada"), required=True
+    )
     parser.add_argument("--rootfs", type=Path, required=True)
     parser.add_argument("--dependencies", type=Path, required=True)
     parser.add_argument("--assets", type=Path, required=True)
@@ -341,12 +363,20 @@ def main() -> int:
         f"caihong-boot-userdata-{kernel_release}.img",
         kernel_package_name,
     ]
-    platform_package = release_dir / (
-        release_dir / "CAIHONG_PLATFORM_PACKAGE"
-    ).read_text().strip()
-    npu_packages = sorted(release_dir.glob("caihong-npu-*.tar.zst"))
-    if not npu_packages:
-        raise RuntimeError("no NPU packages found")
+    package_pointers = {
+        "archlinuxarm": (
+            "CAIHONG_PLATFORM_PACKAGE_ARCHLINUXARM",
+            "CAIHONG_NPU_PACKAGE_LIB",
+        ),
+        "armada": (
+            "CAIHONG_PLATFORM_PACKAGE_ARMADA",
+            "CAIHONG_NPU_PACKAGE_LIB64",
+        ),
+    }
+    platform_pointer, npu_pointer = package_pointers[args.distribution]
+    platform_package = resolve_package_pointer(release_dir, platform_pointer)
+    npu_package = resolve_package_pointer(release_dir, npu_pointer)
+    npu_packages = [npu_package]
     names.extend(
         (
             rpm_package_name,
@@ -383,6 +413,7 @@ def main() -> int:
     dependencies = load_dependencies(args.dependencies)
     manifest = {
         "device": "OnePlus Pad Pro (caihong)",
+        "distribution": args.distribution,
         "kernel_release": kernel_release,
         "boot": boot_manifests,
         "pacman_package": {
@@ -435,6 +466,7 @@ def main() -> int:
     )
     write_release_notes(
         args.notes.resolve(),
+        args.distribution,
         kernel_release,
         copied,
         asset_hashes,

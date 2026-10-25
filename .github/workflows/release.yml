@@ -80,12 +80,12 @@ jobs:
           JOBS=$jobs ZSTD_THREADS=$jobs FORCE=1 \
             KERNEL_CC="ccache gcc" KERNEL_HOSTCC="ccache gcc" \
           scripts/build-kernel-release.sh
-          scripts/build-linux-caihong-package.sh
           scripts/build-linux-caihong-rpm.sh modules-current release
           DISTRIBUTION=archlinuxarm scripts/build-caihong-platform-package.sh release
           DISTRIBUTION=armada scripts/build-caihong-platform-package.sh release
           scripts/build-caihong-npu-package.sh release
           LIBDIR=lib64 scripts/build-caihong-npu-package.sh release
+          scripts/verify-caihong-update-packages.sh release
           kernel_release=$(cat release/KERNEL_RELEASE)
           printf 'kernel_release=%s\n' "$kernel_release" >> "$GITHUB_OUTPUT"
 
@@ -201,8 +201,8 @@ jobs:
           sudo -E env \
             CHROOT_TOOL=chroot \
             KERNEL_PACKAGE="$PWD/release/$(cat release/LINUX_CAIHONG_PACKAGE)" \
-            CAIHONG_PLATFORM_PACKAGE="$PWD/release/$(cat release/CAIHONG_PLATFORM_PACKAGE)" \
-            CAIHONG_NPU_PACKAGE="$PWD/release/$(cat release/CAIHONG_NPU_PACKAGE)" \
+            CAIHONG_PLATFORM_PACKAGE="$PWD/release/$(cat release/CAIHONG_PLATFORM_PACKAGE_ARCHLINUXARM)" \
+            CAIHONG_NPU_PACKAGE="$PWD/release/$(cat release/CAIHONG_NPU_PACKAGE_LIB)" \
             LIBCAMERA_BUILD_JOBS="$jobs" \
             MODULE_TREE="$PWD/modules-current" \
             OUTPUT_FORMAT=ext4 \
@@ -222,8 +222,8 @@ jobs:
             MODULE_TREE="$PWD/modules-current" \
             RELEASE_DIR="$PWD/release" \
             KERNEL_RPM="$PWD/release/$(cat release/LINUX_CAIHONG_RPM)" \
-            CAIHONG_PLATFORM_PACKAGE="$PWD/release/$(cat release/CAIHONG_PLATFORM_PACKAGE)" \
-            CAIHONG_NPU_PACKAGE="$PWD/release/$(cat release/CAIHONG_NPU_PACKAGE)" \
+            CAIHONG_PLATFORM_PACKAGE="$PWD/release/$(cat release/CAIHONG_PLATFORM_PACKAGE_ARMADA)" \
+            CAIHONG_NPU_PACKAGE="$PWD/release/$(cat release/CAIHONG_NPU_PACKAGE_LIB64)" \
             SPARSE_IMAGE=1 \
             scripts/package-armada-rootfs.sh \
             "release/caihong-armada-rootfs-$kernel_release.ext4.sparse.img"
@@ -258,6 +258,12 @@ jobs:
           name: caihong-build-inputs-${{ github.run_id }}
           path: release
 
+      - name: Download resolved dependencies
+        uses: actions/download-artifact@v4
+        with:
+          name: caihong-dependencies-${{ github.run_id }}
+          path: build
+
       - name: Restore release permissions
         run: |
           sudo chown -R "$USER:$USER" release
@@ -283,6 +289,7 @@ jobs:
           kernel_release=$(cat release/KERNEL_RELEASE)
           scripts/prepare-release-assets.py \
             --release-dir release \
+            --distribution archlinuxarm \
             --rootfs "release/caihong-rootfs-$kernel_release.ext4.sparse.img" \
             --dependencies build/dependencies.resolved.env \
             --assets release/assets \
@@ -295,17 +302,22 @@ jobs:
           kernel_release=$(cat release/KERNEL_RELEASE)
           scripts/prepare-release-assets.py \
             --release-dir release \
+            --distribution armada \
             --rootfs "release/caihong-armada-rootfs-$kernel_release.ext4.sparse.img" \
             --dependencies build/dependencies.resolved.env \
             --assets release/armada-assets \
             --notes release/ARMADA_NOTES.md \
             --manifest release/armada-release-manifest.json \
             --checksums release/SHA256SUMS.armada
+
+      - name: Stage release metadata
+        run: |
+          cp release/arch-release-manifest.json release/assets/
+          cp release/SHA256SUMS.arch release/assets/
           cp release/armada-release-manifest.json \
             release/armada-assets/caihong-armada-release-manifest.json
           cp release/ARMADA_NOTES.md release/armada-assets/
-          cp release/$(cat release/LINUX_CAIHONG_RPM) release/armada-assets/
-          cp release/armada-release-manifest.json release/armada-assets/
+          cp release/SHA256SUMS.armada release/armada-assets/
 
       - name: Upload full release bundle
         uses: actions/upload-artifact@v4

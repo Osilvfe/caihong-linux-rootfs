@@ -118,6 +118,13 @@ printf '%s\n' "libdir=$libdir" \
 	> "$stage/usr/share/caihong-platform/layout"
 
 manifest="$stage/manifest"
+cat > "$stage/remove" <<'EOF'
+usr/share/caihong-package/architecture
+usr/share/caihong-package/package
+usr/share/caihong-package/version
+usr/share/libcamera/ipa/simple/sc1320cs.yaml
+usr/share/libcamera/ipa/simple/sc820cs.yaml
+EOF
 : > "$manifest"
 while IFS= read -r file; do
 	relative=${file#./}
@@ -128,18 +135,24 @@ while IFS= read -r file; do
 	fi
 	printf '%s  ./%s\n' "$hash" "$relative" >> "$manifest"
 done <<EOF
-$(cd "$stage" && find usr etc -mindepth 1 \( -type f -o -type l \) -print | sed 's#^#./#' | LC_ALL=C sort)
+$(cd "$stage" && { find usr etc -mindepth 1 \( -type f -o -type l \) -print | sed 's#^#./#'; printf '%s\n' ./remove; } | LC_ALL=C sort)
 EOF
 
 rm -f "$temporary"
 install -d -m 0755 "$release_dir"
-bsdtar --uid 0 --gid 0 --uname root --gname root -cf - -C "$stage" manifest usr etc \
+bsdtar --uid 0 --gid 0 --uname root --gname root -cf - -C "$stage" manifest remove usr etc \
 	| zstd -q -19 -o "$temporary"
 mv "$temporary" "$output"
 
 bsdtar -tf "$output" | grep -qx 'manifest'
 bsdtar -xOf "$output" manifest > "$work_dir/verify-manifest"
 cmp "$manifest" "$work_dir/verify-manifest"
+case $distribution in
+	archlinuxarm) pointer=CAIHONG_PLATFORM_PACKAGE_ARCHLINUXARM ;;
+	armada) pointer=CAIHONG_PLATFORM_PACKAGE_ARMADA ;;
+esac
+printf '%s\n' "${output##*/}" \
+	> "$release_dir/$pointer"
 printf '%s\n' "${output##*/}" \
 	> "$release_dir/CAIHONG_PLATFORM_PACKAGE"
 sha256sum "$output"

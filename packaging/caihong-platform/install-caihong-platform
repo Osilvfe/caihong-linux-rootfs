@@ -21,7 +21,7 @@ if [ "$rollback_only" -eq 0 ] &&
 	exit 2
 fi
 
-	for tool in awk bsdtar cat find mkdir mv rmdir readlink sha256sum; do
+for tool in awk bsdtar cat cp dirname find grep mkdir mktemp mv readlink rm rmdir sha256sum; do
 	if ! command -v "$tool" >/dev/null 2>&1; then
 		echo "missing required tool: $tool" >&2
 		exit 1
@@ -71,6 +71,9 @@ payload="$work_dir/payload"
 installed="$work_dir/installed"
 mkdir -p "$payload"
 bsdtar -xf "$package" -C "$payload" manifest usr etc
+if bsdtar -tf "$package" | grep -qx remove; then
+	bsdtar -xf "$package" -C "$payload" remove
+fi
 
 architecture=$(cat "$payload/usr/share/caihong-package/architecture" 2>/dev/null || true)
 component=$(cat "$payload/usr/share/caihong-package/package" 2>/dev/null || true)
@@ -119,9 +122,50 @@ rollback()
 
 trap 'rollback; cleanup' HUP INT TERM
 
+if [ -f "$payload/remove" ]; then
+	while IFS= read -r path; do
+		case $path in
+			''|'#'*) continue ;;
+			/*|../*|*/../*|*/..|*[![:print:]]*|*[[:space:]]*)
+				echo "invalid removal path: $path" >&2
+				rollback
+				exit 1
+				;;
+			usr/*|etc/*) ;;
+			*)
+				echo "removal path must be below usr or etc: $path" >&2
+				rollback
+				exit 1
+				;;
+		esac
+		case $path in
+			usr/share/caihong-package/*) ;;
+			*)
+				if [ -e "$payload/$path" ] || [ -L "$payload/$path" ]; then
+					echo "removal path is also present in payload: $path" >&2
+					rollback
+					exit 1
+				fi
+				;;
+		esac
+		destination=$target_root/$path
+		relative=${destination#"$target_root"/}
+		previous="$state/previous/$relative"
+		mkdir -p -- "$(dirname -- "$previous")"
+		rm -rf -- "$previous"
+		had_previous=no
+		if [ -e "$destination" ] || [ -L "$destination" ]; then
+			mv -- "$destination" "$previous"
+			had_previous=yes
+		fi
+		printf '%s %s\n' "$destination" "$had_previous" >> "$installed"
+	done < "$payload/remove"
+fi
+
 while IFS= read -r entry; do
 	path=${entry#./}
 	case $path in
+		usr/share/caihong-package/*) continue ;;
 		etc/*) destination=$target_root/$path.caihong-new ;;
 		*) destination=$target_root/$path ;;
 	esac

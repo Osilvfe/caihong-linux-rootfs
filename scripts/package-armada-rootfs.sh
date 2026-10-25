@@ -38,7 +38,7 @@ esac
 (( image_slack_percent >= 5 )) || fail "IMAGE_SLACK_PERCENT must be at least 5"
 [[ $sparse_image == 0 || $sparse_image == 1 ]] || fail "SPARSE_IMAGE must be 0 or 1"
 
-required_tools=(blkid cc chroot depmod e2fsck file find img2simg meson
+required_tools=(blkid bsdtar cc chroot depmod e2fsck file find img2simg meson
 	mkfs.ext4 mount ninja python3 rsync sha256sum skopeo systemctl umoci umount)
 for tool in "${required_tools[@]}"; do
 	command -v "$tool" >/dev/null 2>&1 || fail "missing host tool: $tool"
@@ -50,10 +50,10 @@ done
 [[ -f $release_dir/KERNEL_RELEASE ]] || fail "missing release/KERNEL_RELEASE"
 [[ -f $project_dir/external/qbootctl/meson.build ]] || \
 	fail "missing qbootctl source; run scripts/checkout-dependencies.sh"
-[[ -f $release_dir/CAIHONG_PLATFORM_PACKAGE ]] || \
-	fail "missing release/CAIHONG_PLATFORM_PACKAGE"
-[[ -f $release_dir/CAIHONG_NPU_PACKAGE ]] || \
-	fail "missing release/CAIHONG_NPU_PACKAGE"
+platform_pointer=$release_dir/CAIHONG_PLATFORM_PACKAGE_ARMADA
+[[ -f $platform_pointer ]] || platform_pointer=$release_dir/CAIHONG_PLATFORM_PACKAGE
+npu_pointer=$release_dir/CAIHONG_NPU_PACKAGE_LIB64
+[[ -f $npu_pointer ]] || npu_pointer=$release_dir/CAIHONG_NPU_PACKAGE
 
 resolve_input()
 {
@@ -69,9 +69,21 @@ platform_package=$(resolve_input "$platform_package" platform package)
 npu_package=$(resolve_input "$npu_package" NPU package)
 kernel_rpm=$(resolve_input "$kernel_rpm" kernel RPM)
 [[ -n $platform_package ]] || \
-	platform_package=$release_dir/$(<"$release_dir/CAIHONG_PLATFORM_PACKAGE")
+	[[ -f $platform_pointer ]] || fail "missing Armada platform package pointer"
+[[ -n $platform_package ]] || platform_package=$release_dir/$(<"$platform_pointer")
 [[ -n $npu_package ]] || \
-	npu_package=$release_dir/$(<"$release_dir/CAIHONG_NPU_PACKAGE")
+	[[ -f $npu_pointer ]] || fail "missing lib64 NPU package pointer"
+[[ -n $npu_package ]] || npu_package=$release_dir/$(<"$npu_pointer")
+platform_package=$(resolve_input "$platform_package" platform package)
+npu_package=$(resolve_input "$npu_package" NPU package)
+
+platform_distribution=$(bsdtar -xOf "$platform_package" \
+	usr/share/caihong-platform/distribution)
+[[ $platform_distribution == armada ]] || \
+	fail "platform package targets $platform_distribution, expected armada"
+npu_libdir=$(bsdtar -xOf "$npu_package" usr/share/caihong-npu/libdir)
+[[ $npu_libdir == lib64 ]] || \
+	fail "NPU package uses $npu_libdir, expected lib64"
 
 kernel_release=$(<"$release_dir/KERNEL_RELEASE")
 [[ -d $module_tree/lib/modules/$kernel_release ]] || \
@@ -268,21 +280,21 @@ echo "installing packaged Caihong update payloads"
 install -d -m 0755 "$rootfs/tmp/caihong-packages"
 if [[ -n $platform_package ]]; then
 	install -m 0644 "$platform_package" \
-		"$rootfs/tmp/caihong-packages/$(<"$project_dir/release/CAIHONG_PLATFORM_PACKAGE")"
+		"$rootfs/tmp/caihong-packages/${platform_package##*/}"
 fi
 if [[ -n $npu_package ]]; then
 	install -m 0644 "$npu_package" \
-		"$rootfs/tmp/caihong-packages/$(<"$project_dir/release/CAIHONG_NPU_PACKAGE")"
+		"$rootfs/tmp/caihong-packages/${npu_package##*/}"
 fi
 if [[ -n $platform_package ]]; then
 	CAIHONG_PLATFORM_ROOT="$rootfs" \
 	"$project_dir/packaging/caihong-platform/install-caihong-platform" \
-		"$rootfs/tmp/caihong-packages/$(<"$project_dir/release/CAIHONG_PLATFORM_PACKAGE")"
+		"$rootfs/tmp/caihong-packages/${platform_package##*/}"
 fi
 if [[ -n $npu_package ]]; then
 	CAIHONG_PLATFORM_ROOT="$rootfs" \
 	"$project_dir/packaging/caihong-platform/install-caihong-platform" \
-		"$rootfs/tmp/caihong-packages/$(<"$project_dir/release/CAIHONG_NPU_PACKAGE")"
+		"$rootfs/tmp/caihong-packages/${npu_package##*/}"
 fi
 
 if [[ -n $kernel_rpm ]]; then

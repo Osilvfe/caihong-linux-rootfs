@@ -70,11 +70,15 @@ if [[ ! -d $npu_bundle ]]; then
 	exit 1
 fi
 npu_bundle=$(cd -- "$npu_bundle" && pwd)
-if [[ -z $platform_package && -f $project_dir/release/CAIHONG_PLATFORM_PACKAGE ]]; then
-	platform_package=$project_dir/release/$(<"$project_dir/release/CAIHONG_PLATFORM_PACKAGE")
+platform_pointer=$project_dir/release/CAIHONG_PLATFORM_PACKAGE_ARCHLINUXARM
+[[ -f $platform_pointer ]] || platform_pointer=$project_dir/release/CAIHONG_PLATFORM_PACKAGE
+npu_pointer=$project_dir/release/CAIHONG_NPU_PACKAGE_LIB
+[[ -f $npu_pointer ]] || npu_pointer=$project_dir/release/CAIHONG_NPU_PACKAGE
+if [[ -z $platform_package && -f $platform_pointer ]]; then
+	platform_package=$project_dir/release/$(<"$platform_pointer")
 fi
-if [[ -z $npu_package && -f $project_dir/release/CAIHONG_NPU_PACKAGE ]]; then
-	npu_package=$project_dir/release/$(<"$project_dir/release/CAIHONG_NPU_PACKAGE")
+if [[ -z $npu_package && -f $npu_pointer ]]; then
+	npu_package=$project_dir/release/$(<"$npu_pointer")
 fi
 if [[ -n $platform_package ]]; then
 	platform_package=$(cd -- "$(dirname -- "$platform_package")" && pwd)/${platform_package##*/}
@@ -87,6 +91,21 @@ if [[ -n $npu_package ]]; then
 	npu_package=$(cd -- "$(dirname -- "$npu_package")" && pwd)/${npu_package##*/}
 	[[ -f $npu_package ]] || {
 		echo "NPU package not found: $npu_package" >&2
+		exit 1
+	}
+fi
+if [[ -n $platform_package ]]; then
+	platform_distribution=$(bsdtar -xOf "$platform_package" \
+		usr/share/caihong-platform/distribution)
+	[[ $platform_distribution == archlinuxarm ]] || {
+		echo "platform package targets $platform_distribution, expected archlinuxarm" >&2
+		exit 1
+	}
+fi
+if [[ -n $npu_package ]]; then
+	npu_libdir=$(bsdtar -xOf "$npu_package" usr/share/caihong-npu/libdir)
+	[[ $npu_libdir == lib ]] || {
+		echo "NPU package uses $npu_libdir, expected lib" >&2
 		exit 1
 	}
 fi
@@ -596,21 +615,21 @@ echo "installing packaged Caihong update payloads"
 install -d -m 0755 "$rootfs/tmp/caihong-packages"
 if [[ -n $platform_package ]]; then
 	install -m 0644 "$platform_package" \
-		"$rootfs/tmp/caihong-packages/$(<"$project_dir/release/CAIHONG_PLATFORM_PACKAGE")"
+		"$rootfs/tmp/caihong-packages/${platform_package##*/}"
 fi
 if [[ -n $npu_package ]]; then
 	install -m 0644 "$npu_package" \
-		"$rootfs/tmp/caihong-packages/$(<"$project_dir/release/CAIHONG_NPU_PACKAGE")"
+		"$rootfs/tmp/caihong-packages/${npu_package##*/}"
 fi
 if [[ -n $platform_package ]]; then
 	CAIHONG_PLATFORM_ROOT="$rootfs" \
 	"$project_dir/packaging/caihong-platform/install-caihong-platform" \
-		"$rootfs/tmp/caihong-packages/$(<"$project_dir/release/CAIHONG_PLATFORM_PACKAGE")"
+		"$rootfs/tmp/caihong-packages/${platform_package##*/}"
 fi
 if [[ -n $npu_package ]]; then
 	CAIHONG_PLATFORM_ROOT="$rootfs" \
 	"$project_dir/packaging/caihong-platform/install-caihong-platform" \
-		"$rootfs/tmp/caihong-packages/$(<"$project_dir/release/CAIHONG_NPU_PACKAGE")"
+		"$rootfs/tmp/caihong-packages/${npu_package##*/}"
 fi
 
 echo "building and installing qbootctl"
