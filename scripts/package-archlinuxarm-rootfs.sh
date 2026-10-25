@@ -655,6 +655,12 @@ if ! "$chroot_tool" "$rootfs" "${chroot_env[@]}" \
 fi
 rm -f -- "$rootfs/tmp/linux-caihong.pkg.tar.zst"
 rm -rf -- "$rootfs/tmp/caihong-packages"
+rm -rf -- "$rootfs/usr/lib/firmware"
+install -d -m 0755 "$rootfs/usr/lib/firmware"
+rsync -a --exclude=SOURCE.md --exclude=SHA256SUMS \
+	"$project_dir/firmware/." "$rootfs/usr/lib/firmware/"
+"$project_dir/scripts/build-caihong-audioreach-topology.sh" \
+	"$rootfs/usr/lib/firmware/qcom/sm8650/SM8650-MTP-tplg.bin"
 "$project_dir/scripts/install-caihong-adbd.sh" "$rootfs"
 
 rm -f -- "$rootfs/usr/bin/qemu-aarch64-static"

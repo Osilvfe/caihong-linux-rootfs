@@ -294,6 +294,14 @@ if [[ -n $kernel_rpm ]]; then
 fi
 rm -rf -- "$rootfs/tmp/caihong-packages"
 
+echo "restoring Caihong firmware and AudioReach topology"
+install -d -m 0755 "$rootfs/usr/lib/firmware"
+rsync -aHAX --numeric-ids --chown=0:0 \
+	--exclude=SOURCE.md --exclude=SHA256SUMS \
+	"$project_dir/firmware/" "$rootfs/usr/lib/firmware/"
+"$project_dir/scripts/build-caihong-audioreach-topology.sh" \
+	"$rootfs/usr/lib/firmware/qcom/sm8650/SM8650-MTP-tplg.bin"
+
 echo "installing Caihong boot payload metadata"
 install -d -m 0755 "$rootfs/usr/lib/linux-caihong"
 install -m 0644 "$image_file" "$rootfs/usr/lib/linux-caihong/Image"

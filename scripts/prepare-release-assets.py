@@ -344,10 +344,16 @@ def main() -> int:
     platform_package = release_dir / (
         release_dir / "CAIHONG_PLATFORM_PACKAGE"
     ).read_text().strip()
-    npu_package = release_dir / (
-        release_dir / "CAIHONG_NPU_PACKAGE"
-    ).read_text().strip()
-    names.extend((rpm_package_name, platform_package.name, npu_package.name))
+    npu_packages = sorted(release_dir.glob("caihong-npu-*.tar.zst"))
+    if not npu_packages:
+        raise RuntimeError("no NPU packages found")
+    names.extend(
+        (
+            rpm_package_name,
+            platform_package.name,
+            *(npu_package.name for npu_package in npu_packages),
+        )
+    )
     for name in names:
         target = assets / name
         shutil.copy2(release_dir / name, target)
@@ -410,11 +416,15 @@ def main() -> int:
         "bytes": platform_package.stat().st_size,
         "sha256": asset_hashes[platform_package.name],
     }
-    manifest["npu_package"] = {
-        "name": npu_package.name,
-        "bytes": npu_package.stat().st_size,
-        "sha256": asset_hashes[npu_package.name],
-    }
+    manifest["npu_packages"] = [
+        {
+            "name": npu_package.name,
+            "bytes": npu_package.stat().st_size,
+            "sha256": asset_hashes[npu_package.name],
+        }
+        for npu_package in npu_packages
+    ]
+    npu_package = npu_packages[0]
     manifest_path = args.manifest or release_dir / "release-manifest.json"
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
