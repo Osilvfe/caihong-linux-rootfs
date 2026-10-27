@@ -1,0 +1,1 @@
+console=tty0 fbcon=nodefer consoleblank=0 rw root=PARTLABEL=userdata rootfstype=ext4 rootwait quiet loglevel=4 systemd.mask=caihong-hw-report.service panic=0 clk_ignore_unused pd_ignore_unused regulator_ignore_unused

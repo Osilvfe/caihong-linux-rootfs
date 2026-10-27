@@ -19,7 +19,7 @@ jobs:
           sh -n \
             packaging/linux-caihong/install-current-slot \
             packaging/linux-caihong/linux-caihong.install \
-            armada.env
+            config/armada.env
           python3 -m compileall -q scripts
           shellcheck -x \
             scripts/build-boot-v2.sh \

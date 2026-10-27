@@ -5,8 +5,8 @@ set -eu
 CDPATH=
 
 project_dir=$(cd -- "$(dirname -- "$0")/.." && pwd)
-# shellcheck source=dependencies.env
-. "$project_dir/dependencies.env"
+# shellcheck source=config/dependencies.env
+. "$project_dir/config/dependencies.env"
 dependency_scope=${DEPENDENCY_SCOPE:-release}
 
 case "$dependency_scope" in

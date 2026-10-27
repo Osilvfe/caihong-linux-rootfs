@@ -72,8 +72,8 @@ for root_partlabel in linux userdata; do
 	boot_image="$release_dir/caihong-boot-$root_partlabel-$kernel_release.img"
 	manifest="$boot_image.json"
 	case "$root_partlabel" in
-		linux) cmdline_file="$project_dir/caihong-direct-root-cmdline.txt" ;;
-		userdata) cmdline_file="$project_dir/caihong-direct-root-userdata-cmdline.txt" ;;
+		linux) cmdline_file="$project_dir/config/caihong-direct-root-cmdline.txt" ;;
+		userdata) cmdline_file="$project_dir/config/caihong-direct-root-userdata-cmdline.txt" ;;
 	esac
 
 	FORCE=${FORCE:-0} ROOT_PARTLABEL=$root_partlabel \

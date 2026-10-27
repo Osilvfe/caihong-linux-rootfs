@@ -8,7 +8,7 @@ project_dir=$(cd -- "$(dirname -- "$0")/.." && pwd)
 output=${1:-"$project_dir/release/caihong-boot.img"}
 kernel=${2:-"$project_dir/linux/out/arch/arm64/boot/Image"}
 dtb=${3:-"$project_dir/linux/out/arch/arm64/boot/dts/qcom/sm8650-oneplus-caihong.dtb"}
-cmdline_file=${CMDLINE_FILE:-"$project_dir/caihong-direct-root-cmdline.txt"}
+cmdline_file=${CMDLINE_FILE:-"$project_dir/config/caihong-direct-root-cmdline.txt"}
 root_partlabel=${ROOT_PARTLABEL:-linux}
 temporary="$output.new"
 

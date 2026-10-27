@@ -5,9 +5,9 @@ set -Eeuo pipefail
 CDPATH=
 
 project_dir=$(cd -- "$(dirname -- "$0")/.." && pwd)
-# shellcheck source=../armada.env
+# shellcheck source=../config/armada.env
 # shellcheck disable=SC1091
-source "$project_dir/armada.env"
+source "$project_dir/config/armada.env"
 
 output=${1:-"$project_dir/caihong-armada-rootfs.img"}
 armada_image=${ARMADA_IMAGE:-ghcr.io/armada-os/armada:stable}

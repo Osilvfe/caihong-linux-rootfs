@@ -41,9 +41,9 @@ jobs:
         uses: actions/cache/restore@v4
         with:
           path: .ccache
-          key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('dependencies.env', 'linux/arch/arm64/configs/caihong_defconfig') }}-${{ github.run_id }}
+          key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('config/dependencies.env', 'linux/arch/arm64/configs/caihong_defconfig') }}-${{ github.run_id }}
           restore-keys: |
-            ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('dependencies.env', 'linux/arch/arm64/configs/caihong_defconfig') }}-
+            ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('config/dependencies.env', 'linux/arch/arm64/configs/caihong_defconfig') }}-
             ccache-${{ runner.os }}-${{ runner.arch }}-
 
       - name: Configure compiler cache
@@ -91,7 +91,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: .ccache
-          key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('dependencies.env', 'linux/arch/arm64/configs/caihong_defconfig') }}-${{ github.run_id }}
+          key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('config/dependencies.env', 'linux/arch/arm64/configs/caihong_defconfig') }}-${{ github.run_id }}
 
       - name: Upload device update packages
         uses: actions/upload-artifact@v4
