@@ -337,7 +337,9 @@ if ! grep -aFq "$wifi_version" "$wifi_amss" 2>/dev/null; then
 	failed=1
 fi
 
-for setting in build=caihong pipelines=simple ipas=none \
+for setting in build=caihong \
+	source_commit=$(git -C "$project_dir/external/libcamera" rev-parse --verify HEAD) \
+	pipelines=simple ipas=none \
 	isp_backend=qcom-camera-icp-bps isp_output=nv12m \
 	isp_statistics=output-luma-chroma-sampling \
 	isp_pipeline=raw10-demosaic-white-balance-ccm-nv12m \
@@ -365,6 +367,17 @@ for setting in build=caihong pipelines=simple ipas=none \
 		failed=1
 	fi
 done
+while IFS= read -r setting; do
+	if ! grep -Eq "^${setting}=.+$" \
+		"$target/usr/share/caihong/libcamera-build-info" 2>/dev/null; then
+		echo "missing non-empty Caihong libcamera setting: $setting" >&2
+		failed=1
+	fi
+done <<'EOF'
+build_id
+build_profile
+build_timestamp
+EOF
 for setting in build=caihong version=26.08.1 backend=libcamera-direct \
 	autofocus=single-trigger white_balance=presets \
 	noise_reduction=selectable sharpness=selectable \

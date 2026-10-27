@@ -10,6 +10,7 @@ chroot_tool=${CHROOT_TOOL:-arch-chroot}
 pacman_tool=${PACMAN_TOOL:-pacman}
 jobs=${LIBCAMERA_BUILD_JOBS:-}
 libdir=${LIBCAMERA_LIBDIR:-lib}
+build_profile=${LIBCAMERA_BUILD_PROFILE:-rootfs-native}
 
 if [[ -z $rootfs || ! -d $rootfs ]]; then
 	echo "usage: $0 ROOTFS_DIR" >&2
@@ -162,10 +163,15 @@ done
 "$chroot_tool" "$rootfs" "${chroot_env[@]}" ldconfig
 
 install -d -m 0755 "$rootfs/usr/share/caihong"
+build_timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+build_id=$(printf '%s\n%s\n%s\n' "$source_commit" "$build_profile" "$build_timestamp" | sha256sum | cut -d' ' -f1)
 cat > "$rootfs/usr/share/caihong/libcamera-build-info" <<EOF
 build=caihong
 version=0.7.2+caihong
 source_commit=$source_commit
+build_id=$build_id
+build_profile=$build_profile
+build_timestamp=$build_timestamp
 libdir=$libdir
 pipelines=simple
 ipas=none

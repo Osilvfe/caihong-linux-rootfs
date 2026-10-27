@@ -214,6 +214,17 @@ for setting in pipelines=simple ipas=none \
 		failed=1
 	}
 done
+while IFS= read -r setting; do
+	if ! grep -Eq "^${setting}=.+$" \
+		"$target/usr/share/caihong/libcamera-build-info" 2>/dev/null; then
+		echo "missing non-empty Armada libcamera setting: $setting" >&2
+		failed=1
+	fi
+done <<'EOF'
+build_id
+build_profile
+build_timestamp
+EOF
 grep -qx "source_commit=$plasma_camera_commit" \
 	"$target/usr/share/caihong/plasma-camera-build-info" 2>/dev/null || {
 	echo "Armada Plasma Camera source commit does not match the workspace" >&2
