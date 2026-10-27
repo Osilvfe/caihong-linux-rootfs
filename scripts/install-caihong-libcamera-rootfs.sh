@@ -7,6 +7,7 @@ CDPATH=
 project_dir=$(cd -- "$(dirname -- "$0")/.." && pwd)
 rootfs=${1:-}
 chroot_tool=${CHROOT_TOOL:-arch-chroot}
+pacman_tool=${PACMAN_TOOL:-pacman}
 jobs=${LIBCAMERA_BUILD_JOBS:-}
 libdir=${LIBCAMERA_LIBDIR:-lib}
 
@@ -40,6 +41,16 @@ for tool in "$chroot_tool" git nproc rsync; do
 	if ! command -v "$tool" >/dev/null 2>&1; then
 		echo "missing host tool: $tool" >&2
 		exit 1
+	fi
+done
+
+# Distribution packages own the software ISP proxy, IPA payload and matching
+# headers. Remove them before overlaying the Caihong build so package database
+# upgrades cannot silently reintroduce the software ISP.
+obsolete_packages=(libcamera libcamera-ipa libcamera-tools)
+for package in "${obsolete_packages[@]}"; do
+	if "$chroot_tool" "$rootfs" "$pacman_tool" -Qq "$package" >/dev/null 2>&1; then
+		"$chroot_tool" "$rootfs" "$pacman_tool" -Rdd --noconfirm "$package"
 	fi
 done
 

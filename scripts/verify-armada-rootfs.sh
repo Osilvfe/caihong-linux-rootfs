@@ -154,6 +154,7 @@ obsolete_camera_paths=(
 	usr/lib/libcamera/ipa/ipa_soft_simple.so
 	usr/lib/libcamera/ipa/ipa_soft_simple.so.sign
 	usr/lib/libcamera/soft_ipa_proxy
+	usr/include/libcamera/libcamera/ipa/soft_ipa_interface.h
 	usr/lib64/libcamera/ipa/ipa_soft_simple.so
 	usr/lib64/libcamera/ipa/ipa_soft_simple.so.sign
 	usr/lib64/libcamera/soft_ipa_proxy
@@ -166,6 +167,13 @@ obsolete_camera_paths=(
 for path in "${obsolete_camera_paths[@]}"; do
 	if [[ -e $target/$path || -L $target/$path ]]; then
 		echo "obsolete software ISP path remains in Armada rootfs: /$path" >&2
+		failed=1
+	fi
+done
+
+for package in libcamera libcamera-ipa libcamera-tools; do
+	if rpm --root "$target" -q "$package" >/dev/null 2>&1; then
+		echo "obsolete distribution camera package remains: $package" >&2
 		failed=1
 	fi
 done
