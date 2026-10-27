@@ -244,6 +244,8 @@ obsolete_camera_paths='usr/lib/libcamera/ipa/ipa_soft_simple.so
 usr/lib/libcamera/ipa/ipa_soft_simple.so.sign
 usr/lib64/libcamera/ipa/ipa_soft_simple.so
 usr/lib64/libcamera/ipa/ipa_soft_simple.so.sign
+usr/lib/libcamera/soft_ipa_proxy
+usr/lib64/libcamera/soft_ipa_proxy
 usr/libexec/libcamera/soft_ipa_proxy
 usr/share/libcamera/ipa/simple/sc1320cs.yaml
 usr/share/libcamera/ipa/simple/sc820cs.yaml'
