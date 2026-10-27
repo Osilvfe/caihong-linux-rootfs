@@ -34,8 +34,6 @@ root=PARTLABEL=linux rootfstype=ext4 rootwait rw
 | NPU 与 VPU | 正常 | CDSP/HTP NPU 测试通过，包括 Hexagon v75、QNN 浮点和量化 Conv2d 负载。Iris VPU 的 H.264 和 HEVC 硬件解码通过混合负载回归；编码能力尚未验证。 |
 | 存储 | 正常 | UFS 存储可用，MCQ 已启用（实测日志为 9 个硬件队列、最大命令深度 64）。设备专属完整频率表仍待补充。 |
 
-硬件 ISP 迁移结果、验证方法和剩余限制见
-[CAMERA_HARDWARE_ISP.md](CAMERA_HARDWARE_ISP.md)。
 
 ## 发布文件
 

@@ -24,8 +24,6 @@ development release for this device; review the status table before installing.
 | NPU and VPU | Working | CDSP/HTP NPU tests pass, including Hexagon v75, QNN float and quantized Conv2d workloads. Iris VPU H.264 and HEVC hardware decoding passed mixed-load regression runs; encoder support is untested. |
 | Storage | Working | UFS storage works with MCQ enabled (9 hardware queues and a maximum command depth of 64 in validated logs). A device-specific full frequency table is still pending. |
 
-See [CAMERA_HARDWARE_ISP.md](CAMERA_HARDWARE_ISP.md) for the completed
-hardware-ISP migration, validation procedure and remaining camera limitations.
 
 ## Release contents
 
