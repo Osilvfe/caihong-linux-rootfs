@@ -1,0 +1,15 @@
+[Unit]
+Description=Map Caihong touch and pen input to the displayed viewport
+After=plasma-kwin_wayland.service
+PartOf=graphical-session.target
+ConditionEnvironment=WAYLAND_DISPLAY
+
+[Service]
+Type=simple
+Environment=QT_QPA_PLATFORM=wayland
+ExecStart=/usr/bin/python3 /usr/local/sbin/caihong-display-input
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

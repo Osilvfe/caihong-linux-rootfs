@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Caihong Display Input Mapping
+Exec=systemctl --user start caihong-display-input.service
+OnlyShowIn=KDE;
+NoDisplay=true

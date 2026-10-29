@@ -1,0 +1,168 @@
+#!/usr/bin/env python3
+
+import argparse
+import json
+import math
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+
+
+NATIVE_WIDTH = 3000
+NATIVE_HEIGHT = 2120
+INPUT_INTERFACE = "org.kde.KWin.InputDevice"
+PROPERTIES_INTERFACE = "org.freedesktop.DBus.Properties"
+MANAGER_PATH = "/org/kde/KWin/InputDevice"
+DEVICE_NAMES = {"Novatek NT36532E Touchscreen", "Novatek NT36532E Pen"}
+
+
+def viewport(width, height):
+    if width <= 0 or height <= 0 or width > NATIVE_WIDTH or height > NATIVE_HEIGHT:
+        raise ValueError("unsupported panel input size")
+    target_width, target_height = NATIVE_WIDTH, NATIVE_HEIGHT
+    if target_width * height > target_height * width:
+        target_width = target_height * width // height
+    else:
+        target_height = target_width * height // width
+    return ((NATIVE_WIDTH - target_width) // 2,
+            (NATIVE_HEIGHT - target_height) // 2, target_width, target_height)
+
+
+def parse_matrix(value):
+    matrix = [float(component) for component in value.split(",")]
+    if len(matrix) != 16 or not all(math.isfinite(component) for component in matrix):
+        raise ValueError("invalid calibration matrix")
+    return matrix
+
+
+def corrected_matrix(base, width, height):
+    left, top, target_width, target_height = viewport(width, height)
+    matrix = list(base)
+    for column in range(4):
+        matrix[column] = (NATIVE_WIDTH * base[column] - left * base[8 + column]) / target_width
+        matrix[4 + column] = (NATIVE_HEIGHT * base[4 + column] - top * base[8 + column]) / target_height
+    return ",".join(format(component, ".12g") for component in matrix)
+
+
+class Calibration:
+    def __init__(self, bus, state_path):
+        from gi.repository import GLib
+
+        self.bus = bus
+        self.GLib = GLib
+        self.state_path = state_path
+        self.state = json.loads(state_path.read_text()) if state_path.exists() else {}
+        self.pending = 0
+
+    def properties(self, path):
+        return self.bus.call_sync("org.kde.KWin", path, PROPERTIES_INTERFACE, "GetAll",
+                                  self.GLib.Variant("(s)", (INPUT_INTERFACE,)),
+                                  self.GLib.VariantType.new("(a{sv})"), 0, 3000, None).unpack()[0]
+
+    def set_matrix(self, path, value):
+        self.bus.call_sync("org.kde.KWin", path, PROPERTIES_INTERFACE, "Set",
+                           self.GLib.Variant("(ssv)", (INPUT_INTERFACE, "calibrationMatrix",
+                                                      self.GLib.Variant("s", value))),
+                           None, 0, 3000, None)
+
+    def devices(self):
+        names = self.bus.call_sync("org.kde.KWin", MANAGER_PATH, PROPERTIES_INTERFACE, "Get",
+                                  self.GLib.Variant("(ss)", ("org.kde.KWin.InputDeviceManager", "devicesSysNames")),
+                                  self.GLib.VariantType.new("(v)"), 0, 3000, None).unpack()[0]
+        for name in names:
+            path = MANAGER_PATH + "/" + name
+            properties = self.properties(path)
+            if properties["name"] in DEVICE_NAMES and properties["supportsCalibrationMatrix"]:
+                yield path, properties
+
+    def save(self):
+        self.state_path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self.state_path.with_suffix(".new")
+        temporary.write_text(json.dumps(self.state, indent=2) + "\n")
+        temporary.replace(self.state_path)
+
+    def update(self):
+        self.pending = 0
+        try:
+            configuration = json.loads(subprocess.run(["kscreen-doctor", "-j"], check=True,
+                                                      capture_output=True, text=True, timeout=5).stdout)
+            panel = next(output for output in configuration["outputs"]
+                         if output["name"] == "DSI-1" and output["enabled"] and output["connected"])
+            mode = next(mode for mode in panel["modes"] if mode["id"] == panel["currentModeId"])
+            width, height = mode["size"]["width"], mode["size"]["height"]
+            for path, properties in self.devices():
+                if properties["orientationDBus"] not in (0, 2):
+                    raise ValueError("custom device orientation requires separate calibration")
+                name = properties["name"]
+                if name not in self.state:
+                    self.state[name] = {"base": properties["calibrationMatrix"]}
+                    self.save()
+                value = corrected_matrix(parse_matrix(self.state[name]["base"]), width, height)
+                actual = parse_matrix(properties["calibrationMatrix"])
+                if any(not math.isclose(first, second, rel_tol=1e-5, abs_tol=1e-7)
+                       for first, second in zip(actual, parse_matrix(value))):
+                    self.set_matrix(path, value)
+                    print(f"{name}: {width}x{height}, viewport={viewport(width, height)}, matrix={value}", flush=True)
+        except (OSError, ValueError, KeyError, StopIteration, subprocess.SubprocessError, self.GLib.Error) as error:
+            print(f"Display input calibration: {error}", file=sys.stderr, flush=True)
+        return False
+
+    def schedule(self, *arguments):
+        if not self.pending:
+            self.pending = self.GLib.timeout_add(100, self.update)
+
+    def restore(self):
+        for path, properties in self.devices():
+            entry = self.state.get(properties["name"])
+            if entry:
+                self.set_matrix(path, entry["base"])
+
+
+def main():
+    from gi.repository import Gio, GLib, GLibUnix
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--once", action="store_true")
+    parser.add_argument("--restore", action="store_true")
+    arguments = parser.parse_args()
+    state_home = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state")))
+    config_home = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config")))
+    bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+    calibration = Calibration(bus, state_home / "caihong-display-input/calibration.json")
+    if arguments.restore:
+        calibration.restore()
+        return
+    if arguments.once:
+        calibration.update()
+        return
+    monitor = Gio.File.new_for_path(str(config_home)).monitor_directory(Gio.FileMonitorFlags.WATCH_MOVES, None)
+
+    def changed(monitor, file, other, event):
+        if any(item and item.get_basename() == "kwinoutputconfig.json" for item in (file, other)):
+            calibration.schedule()
+
+    monitor.connect("changed", changed)
+    Gio.bus_watch_name_on_connection(bus, "org.kde.KWin", Gio.BusNameWatcherFlags.NONE,
+                                    lambda *arguments: calibration.schedule(), None)
+    bus.signal_subscribe("org.kde.KWin", "org.kde.KWin.InputDeviceManager", "deviceAdded",
+                         MANAGER_PATH, None, Gio.DBusSignalFlags.NONE, calibration.schedule)
+    loop = GLib.MainLoop()
+
+    def stop():
+        try:
+            calibration.restore()
+        except GLib.Error as error:
+            print(error, file=sys.stderr)
+        loop.quit()
+        return False
+
+    GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, stop)
+    GLibUnix.signal_add(GLib.PRIORITY_DEFAULT, signal.SIGINT, stop)
+    calibration.schedule()
+    loop.run()
+
+
+if __name__ == "__main__":
+    main()
