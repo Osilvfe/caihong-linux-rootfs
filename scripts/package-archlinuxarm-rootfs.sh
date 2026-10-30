@@ -533,6 +533,7 @@ systemctl --root="$rootfs" set-default graphical.target
 systemctl --root="$rootfs" enable caihong-grow-rootfs.service
 systemctl --root="$rootfs" enable caihong-fix-kwin-brightness.service
 systemctl --root="$rootfs" enable caihong-clean-pogo-kde.service
+systemctl --root="$rootfs" enable caihong-keyboard.service
 systemctl --root="$rootfs" enable caihong-bluetooth-autostart.service
 systemctl --root="$rootfs" enable caihong-adbd.service
 "$chroot_tool" "$rootfs" "${chroot_env[@]}" \

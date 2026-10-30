@@ -1,0 +1,28 @@
+[Unit]
+Description=Caihong automatic Bluetooth keyboard compatibility
+After=dbus.service bluetooth.service
+Requires=dbus.service
+ConditionPathExists=/proc/device-tree/compatible
+
+[Service]
+Type=dbus
+BusName=org.caihong.Keyboard1
+ExecStart=/usr/local/sbin/caihong-keyboard
+StateDirectory=caihong-keyboard
+StateDirectoryMode=0700
+UMask=0077
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/sys
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

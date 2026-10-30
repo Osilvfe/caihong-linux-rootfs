@@ -1,0 +1,378 @@
+#!/usr/bin/env python3
+
+import fcntl
+import json
+import logging
+import os
+from pathlib import Path
+import re
+import select
+import signal
+import struct
+import threading
+import time
+
+
+BUS_NAME = 'org.caihong.Keyboard1'
+OBJECT_PATH = '/org/caihong/Keyboard1'
+KEYBOARD_SERVICE = '5768d878-b436-11ee-a506-0242ac120002'
+KEYBOARD_WRITE = '5768da9e-b436-11ee-a506-0242ac120002'
+INTERFACE_XML = '''<node><interface name="org.caihong.Keyboard1">
+<method name="GetStatus"><arg type="s" direction="out"/></method>
+<method name="SetMediaKeys"><arg type="b" direction="in"/></method>
+<method name="SetTouchpad"><arg type="b" direction="in"/></method>
+</interface></node>'''
+
+
+class Unavailable(RuntimeError):
+    pass
+
+
+class Paths:
+    def __init__(self, root=Path('/')):
+        self.root = root
+
+    def path(self, name):
+        return self.root / name.lstrip('/')
+
+
+def text(path):
+    try:
+        return path.read_text().strip()
+    except (OSError, UnicodeError):
+        return None
+
+
+def number(path):
+    try:
+        return int(text(path))
+    except (TypeError, ValueError):
+        return None
+
+
+def keyboard_nodes(paths):
+    found = []
+    for node in paths.path('/sys/class/input').glob('event*'):
+        device = node / 'device'
+        identity = tuple(text(device / 'id' / field) for field in ('bustype', 'vendor', 'product'))
+        if identity != ('0005', '22d9', '3869'):
+            continue
+        name = text(device / 'name') or ''
+        if 'Touchpad' in name or 'Consumer Control' in name:
+            continue
+        address = (text(device / 'uniq') or '').upper()
+        if not re.fullmatch(r'(?:[0-9A-F]{2}:){5}[0-9A-F]{2}', address):
+            continue
+        resolved = device.resolve()
+        controls = [parent / 'oneplus' for parent in (resolved, *resolved.parents)
+                    if parent.name.startswith('0005:22D9:3869.')
+                    and (parent / 'oneplus/f4_compensation').is_file()]
+        if len(controls) == 1:
+            found.append({'event': paths.path('/dev/input') / node.name,
+                          'controls': controls[0], 'address': address})
+    return found
+
+
+def pogo_node(paths):
+    found = [node for node in paths.path('/sys/bus/serial/devices').glob('*')
+             if 'DRIVER=oneplus-pogo' in (text(node / 'uevent') or '').splitlines()
+             and (node / 'attached').is_file()]
+    return found[0] if len(found) == 1 else None
+
+
+def touchpad_command(enabled):
+    if type(enabled) is not bool:
+        raise ValueError('touchpad state must be boolean')
+    return bytes.fromhex('1301010015' if enabled else '1301010116')
+
+
+class Bluez:
+    def __init__(self):
+        from gi.repository import Gio, GLib
+        self.Gio, self.GLib = Gio, GLib
+        self.bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
+
+    def call(self, path, interface, method, parameters=None):
+        try:
+            return self.bus.call_sync('org.bluez', path, interface, method, parameters, None,
+                                      self.Gio.DBusCallFlags.NO_AUTO_START, 3000, None).unpack()
+        except self.GLib.Error as error:
+            raise Unavailable(error.message) from error
+
+    def keyboard_characteristic(self, address):
+        objects = self.call('/', 'org.freedesktop.DBus.ObjectManager', 'GetManagedObjects')[0]
+        devices = [(path, interfaces['org.bluez.Device1']) for path, interfaces in objects.items()
+                   if interfaces.get('org.bluez.Device1', {}).get('Address', '').upper() == address]
+        if len(devices) != 1 or not all(devices[0][1].get(key)
+                                        for key in ('Paired', 'Connected', 'ServicesResolved')):
+            raise Unavailable('waiting for the paired keyboard connection')
+        device, properties = devices[0]
+        if not re.fullmatch(r'(?:usb|bluetooth):v22D9p3869d[0-9A-Fa-f]{4}', properties.get('Modalias', '')):
+            raise Unavailable('keyboard model mismatch')
+        services = {path for path, interfaces in objects.items()
+                    if interfaces.get('org.bluez.GattService1', {}).get('Device') == device
+                    and interfaces['org.bluez.GattService1'].get('UUID') == KEYBOARD_SERVICE}
+        found = [path for path, interfaces in objects.items()
+                 if interfaces.get('org.bluez.GattCharacteristic1', {}).get('Service') in services
+                 and interfaces['org.bluez.GattCharacteristic1'].get('UUID') == KEYBOARD_WRITE
+                 and 'write' in interfaces['org.bluez.GattCharacteristic1'].get('Flags', [])]
+        if len(found) != 1:
+            raise Unavailable('keyboard command characteristic is not unique')
+        return found[0]
+
+    def write(self, characteristic, payload):
+        parameters = self.GLib.Variant('(aya{sv})', (payload, {'type': self.GLib.Variant('s', 'request')}))
+        self.call(characteristic, 'org.bluez.GattCharacteristic1', 'WriteValue', parameters)
+
+
+class KeyboardCompanion:
+    def __init__(self, paths, bluez):
+        self.paths, self.bluez = paths, bluez
+        self.lock = threading.RLock()
+        self.stopped = threading.Event()
+        self.thread = None
+        self.target = True
+        self.error = None
+        self.last_write_ms = None
+        self.node = None
+        self.characteristic = None
+
+    def running(self):
+        return self.thread is not None and self.thread.is_alive()
+
+    def send(self, enabled):
+        started = time.monotonic()
+        self.bluez.write(self.characteristic, touchpad_command(enabled))
+        self.last_write_ms = round((time.monotonic() - started) * 1000, 2)
+
+    def start(self):
+        if self.running():
+            return
+        nodes = keyboard_nodes(self.paths)
+        if len(nodes) != 1:
+            raise Unavailable('waiting for one supported Bluetooth keyboard')
+        pogo = pogo_node(self.paths)
+        if pogo and number(pogo / 'attached') == 1:
+            raise Unavailable('keyboard is using Pogo')
+        self.node = nodes[0]
+        gate = self.node['controls'] / 'f4_compensation'
+        if number(gate) != 0:
+            raise Unavailable('another backend owns the compensation gate')
+        self.characteristic = self.bluez.keyboard_characteristic(self.node['address'])
+        keyboard = self.node['event'].open('rb', buffering=0)
+        try:
+            fcntl.flock(keyboard, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with self.lock:
+                self.send(True)
+                self.target = True
+                gate.write_text('1\n')
+                self.error = None
+                self.stopped.clear()
+                self.thread = threading.Thread(target=self.run, args=(keyboard,), daemon=True)
+                self.thread.start()
+        except BaseException:
+            keyboard.close()
+            if number(gate) == 1:
+                gate.write_text('0\n')
+            raise
+
+    def set_target(self, enabled):
+        if type(enabled) is not bool:
+            raise ValueError('touchpad state must be boolean')
+        with self.lock:
+            if not self.running():
+                raise Unavailable('Bluetooth keyboard is not ready')
+            self.send(enabled)
+            self.target = enabled
+
+    def run(self, keyboard):
+        packet = struct.Struct('llHHi')
+        scan = None
+        try:
+            if packet.size != 24:
+                raise Unavailable('unsupported input event ABI')
+            while not self.stopped.is_set():
+                pogo = pogo_node(self.paths)
+                if pogo and number(pogo / 'attached') == 1:
+                    break
+                readable, _, _ = select.select([keyboard], [], [], 0.2)
+                if not readable:
+                    continue
+                payload = os.read(keyboard.fileno(), packet.size * 64)
+                if not payload or len(payload) % packet.size:
+                    raise Unavailable('keyboard input disappeared or was truncated')
+                for seconds, microseconds, kind, code, value in packet.iter_unpack(payload):
+                    if kind == 0:
+                        if code == 3:
+                            raise Unavailable('input events lost; waiting for a fresh backend')
+                        if code == 0:
+                            scan = None
+                    elif kind == 4 and code == 4:
+                        scan = value
+                    elif kind == 1 and value == 1 and scan in (0x7006b, 0x7006c) and code in (62, 530):
+                        with self.lock:
+                            target = not self.target if code == 530 else self.target
+                            self.send(target)
+                            self.target = target
+        except (OSError, RuntimeError) as error:
+            self.error = str(error)
+        finally:
+            try:
+                (self.node['controls'] / 'f4_compensation').write_text('0\n')
+            except OSError:
+                pass
+            try:
+                with self.lock:
+                    self.send(True)
+                    self.target = True
+            except (OSError, RuntimeError) as error:
+                self.error = str(error)
+            keyboard.close()
+
+    def stop(self):
+        self.stopped.set()
+        if self.thread:
+            self.thread.join(timeout=7)
+            if self.thread.is_alive():
+                raise RuntimeError('keyboard worker did not stop')
+
+
+class Service:
+    def __init__(self, paths, bluez):
+        self.paths = paths
+        self.companion = KeyboardCompanion(paths, bluez)
+        self.suspended = False
+        self.retry_after = 0
+        self.error = None
+        self.preferences = paths.path('/var/lib/caihong-keyboard/preferences.json')
+        self.media_keys = False
+        if self.preferences.exists():
+            data = json.loads(self.preferences.read_text())
+            if not isinstance(data, dict) or set(data) != {'media_keys'} or type(data['media_keys']) is not bool:
+                raise ValueError('invalid keyboard preferences')
+            self.media_keys = data['media_keys']
+
+    def monitor(self):
+        try:
+            pogo = pogo_node(self.paths)
+            attached = pogo and number(pogo / 'attached') == 1
+            if self.suspended or attached or len(keyboard_nodes(self.paths)) != 1:
+                self.companion.stop()
+                return True
+            if self.companion.running() or time.monotonic() < self.retry_after:
+                return True
+            nodes = keyboard_nodes(self.paths)
+            (nodes[0]['controls'] / 'media_keys').write_text(str(int(self.media_keys)) + '\n')
+            self.companion.start()
+            self.error = None
+            self.retry_after = time.monotonic() + 5
+        except (OSError, RuntimeError) as error:
+            message = str(error)
+            if message != self.error:
+                logging.warning('keyboard backend: %s', message)
+            self.error = message
+            self.retry_after = time.monotonic() + 5
+        return True
+
+    def set_media_keys(self, enabled):
+        if type(enabled) is not bool:
+            raise ValueError('media key preference must be boolean')
+        self.preferences.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self.preferences.with_suffix('.new')
+        with temporary.open('w', encoding='utf-8') as stream:
+            os.fchmod(stream.fileno(), 0o600)
+            json.dump({'media_keys': enabled}, stream)
+            stream.write('\n')
+            stream.flush()
+            os.fsync(stream.fileno())
+        temporary.replace(self.preferences)
+        self.media_keys = enabled
+        nodes = keyboard_nodes(self.paths)
+        if len(nodes) == 1:
+            (nodes[0]['controls'] / 'media_keys').write_text(str(int(enabled)) + '\n')
+
+    def set_touchpad(self, enabled):
+        if type(enabled) is not bool:
+            raise ValueError('touchpad state must be boolean')
+        pogo = pogo_node(self.paths)
+        if pogo and number(pogo / 'attached') == 1:
+            (pogo / 'touchpad_enabled').write_text(str(int(enabled)) + '\n')
+        else:
+            self.companion.set_target(enabled)
+
+    def status(self):
+        pogo = pogo_node(self.paths)
+        attached = number(pogo / 'attached') if pogo else None
+        running = self.companion.running()
+        return {'automatic': True, 'compensation_running': running, 'media_keys': int(self.media_keys),
+                'touchpad_target': self.companion.target if running else None,
+                'pogo_attached': attached, 'suspended': self.suspended,
+                'last_write_ms': self.companion.last_write_ms, 'error': self.error or self.companion.error}
+
+    def sleep_changed(self, connection, sender, path, interface, name, parameters, user_data):
+        self.suspended = parameters.unpack()[0]
+        if self.suspended:
+            self.companion.stop()
+        else:
+            self.retry_after = 0
+
+    def run(self):
+        from gi.repository import Gio, GLib
+        bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
+        loop = GLib.MainLoop()
+        interface = Gio.DBusNodeInfo.new_for_xml(INTERFACE_XML).interfaces[0]
+
+        def method(connection, sender, path, interface_name, name, parameters, invocation):
+            try:
+                if name == 'GetStatus':
+                    invocation.return_value(GLib.Variant('(s)', (json.dumps(self.status()),)))
+                    return
+                identity = bus.call_sync('org.freedesktop.DBus', '/org/freedesktop/DBus',
+                                         'org.freedesktop.DBus', 'GetConnectionUnixUser',
+                                         GLib.Variant('(s)', (sender,)), None,
+                                         Gio.DBusCallFlags.NO_AUTO_START, 2000, None).unpack()[0]
+                if identity != 0:
+                    raise PermissionError('only the authorized settings backend may change keyboard preferences')
+                if name == 'SetMediaKeys':
+                    self.set_media_keys(parameters.unpack()[0])
+                elif name == 'SetTouchpad':
+                    self.set_touchpad(parameters.unpack()[0])
+                else:
+                    raise ValueError('unknown method')
+                invocation.return_value(GLib.Variant('()', ()))
+            except (OSError, ValueError, RuntimeError, GLib.Error) as error:
+                invocation.return_dbus_error(BUS_NAME + '.Error', str(error))
+
+        registration = bus.register_object(OBJECT_PATH, interface, method, None, None)
+        owner = bus.call_sync('org.freedesktop.DBus', '/org/freedesktop/DBus', 'org.freedesktop.DBus',
+                              'RequestName', GLib.Variant('(su)', (BUS_NAME, 4)), None,
+                              Gio.DBusCallFlags.NONE, 2000, None).unpack()[0]
+        if owner != 1:
+            raise Unavailable('another keyboard service owns the bus name')
+        subscription = bus.signal_subscribe('org.freedesktop.login1', 'org.freedesktop.login1.Manager',
+                                            'PrepareForSleep', '/org/freedesktop/login1', None,
+                                            Gio.DBusSignalFlags.NONE, self.sleep_changed, None)
+        timer = GLib.timeout_add(1000, self.monitor)
+        signal.signal(signal.SIGTERM, lambda *arguments: loop.quit())
+        signal.signal(signal.SIGINT, lambda *arguments: loop.quit())
+        try:
+            self.monitor()
+            loop.run()
+        finally:
+            GLib.source_remove(timer)
+            bus.signal_unsubscribe(subscription)
+            self.companion.stop()
+            bus.unregister_object(registration)
+
+
+def main():
+    logging.basicConfig(level=logging.INFO, format='%(message)s')
+    paths = Paths()
+    compatible = paths.path('/proc/device-tree/compatible').read_bytes().split(b'\0')
+    if os.geteuid() != 0 or b'oneplus,caihong' not in compatible:
+        raise SystemExit('this service requires root on oneplus,caihong')
+    Service(paths, Bluez()).run()
+
+
+if __name__ == '__main__':
+    main()
