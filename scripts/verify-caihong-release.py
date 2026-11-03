@@ -45,6 +45,8 @@ REQUIRED_MODULES = (
     "qcom_q6v5_pas",
     "qcom-iris",
     "xpad",
+    "qcom_camera_icp",
+    "qcom-camera-icp-bps",
 )
 REQUIRED_MODULES_OR_BUILTIN = ("msm",)
 EARLY_FIRMWARE = (
