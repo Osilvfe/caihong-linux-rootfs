@@ -245,6 +245,7 @@ Commands that change hardware or boot state require root privileges.
 | `caihong-hardware-mac` | Reads the factory WLAN and Bluetooth addresses from the redundant device NVRAM and applies them during boot. |
 | `caihong-npu-info` | `sudo caihong-npu-info` reports CDSP firmware state and FastRPC capabilities. `--self-test` verifies generic v75 DSP execution; `--htp-self-test` verifies a float QAIRT/QNN graph; `--htp-conv-self-test` verifies quantized Conv2d against a CPU reference. |
 | `caihong-bluetooth-autostart` | Powers on the configured Bluetooth controller during boot. |
+| `caihong-charge` | Reads battery status and firmware health values with `status` / `health`; `sudo caihong-charge limit 75 80` sets charging thresholds, and `sudo caihong-charge bypass on` / `off` controls charging inhibition without disconnecting the adapter. This does not guarantee battery isolation. |
 | `caihong-pen-pair` | Pairs a pen address obtained from a validated CPS8601 magnetic-attach event. Normally run by its systemd timer. |
 | `caihong-pen-charge` | Performs a bounded CPS8601 charging/attach observation. Normally run by its systemd timer. |
 | `caihong-pen-autoconnect` | Restores the paired pen connection and touchscreen pen scan mode. Normally run by its systemd timer. |
@@ -257,6 +258,11 @@ Commands that change hardware or boot state require root privileges.
 The rootfs also includes the Caihong SSC service, custom libcamera stack,
 Plasma Camera integration, firmware, audio topology and matching kernel
 modules.
+
+Charging defaults to automatic operation with no extra charge limit. Settings
+persist only when explicitly saved with `--save` and restored by enabling
+`caihong-charge.service`; the service is not enabled by default. Firmware health
+and capacity values are not independent measurements of battery wear.
 
 ## Kernel updates
 

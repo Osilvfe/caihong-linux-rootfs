@@ -1,0 +1,143 @@
+#!/usr/bin/env python3
+
+import argparse
+import json
+import os
+from pathlib import Path
+import sys
+import time
+
+
+BATTERY = Path("/sys/class/power_supply/qcom-battmgr-bat")
+CONFIG = Path("/etc/caihong-charge.json")
+MODES = {"on": "inhibit-charge", "off": "auto"}
+
+
+def read(name):
+    return (BATTERY / name).read_text().strip()
+
+
+def number(name):
+    try:
+        return int(read(name))
+    except (OSError, ValueError):
+        return None
+
+
+def behaviour():
+    value = read("charge_behaviour")
+    return next((item[1:-1] for item in value.split() if item.startswith("[")), value)
+
+
+def status():
+    result = {name: number(name) for name in (
+        "capacity", "state_of_health", "cycle_count", "charge_full", "charge_full_design",
+        "current_now", "voltage_now", "temp", "charge_control_start_threshold",
+        "charge_control_end_threshold")}
+    result["model"] = read("model_name")
+    result["status"] = read("status")
+    result["charge_behaviour"] = behaviour() if (BATTERY / "charge_behaviour").exists() else None
+    result["power_path"] = "停充供电不等于电池硬件隔离；输入功率不足时电池仍可能补电"
+    result["threshold_soc"] = "阈值使用原始电量，不是桌面平滑后的电量"
+    full, design = result["charge_full"], result["charge_full_design"]
+    result["full_to_design_percent"] = round(full * 100 / design, 2) if full and design and design > 0 else None
+    diagnostic = BATTERY / "device/oneplus_charge_control_status"
+    if diagnostic.exists():
+        result["controller"] = diagnostic.read_text().strip()
+    return result
+
+
+def validate(config):
+    if not isinstance(config, dict) or set(config) != {"start", "end", "behaviour"}:
+        raise ValueError("配置必须包含 start、end、behaviour")
+    if type(config["start"]) is not int or type(config["end"]) is not int:
+        raise ValueError("阈值必须为整数")
+    if not 0 <= config["start"] < config["end"] <= 100:
+        raise ValueError("必须满足 0 ≤ 恢复阈值 < 停止阈值 ≤ 100")
+    if config["behaviour"] not in MODES.values():
+        raise ValueError("不支持的充电模式")
+    return config
+
+
+def write(name, value):
+    (BATTERY / name).write_text(str(value) + "\n")
+
+
+def apply(config):
+    validate(config)
+    if not (BATTERY / "charge_behaviour").exists():
+        raise RuntimeError("当前内核未提供 Caihong 充电控制，请勿使用旧的错误阈值接口")
+    start, end = number("charge_control_start_threshold"), number("charge_control_end_threshold")
+    if start is None or end is None or not 0 <= start < end <= 100:
+        raise RuntimeError("当前阈值无效，拒绝写入不兼容的原厂协议")
+    if config["behaviour"] == "inhibit-charge":
+        write("charge_behaviour", "inhibit-charge")
+    if config["start"] >= end:
+        write("charge_control_end_threshold", config["end"])
+        write("charge_control_start_threshold", config["start"])
+    else:
+        write("charge_control_start_threshold", config["start"])
+        write("charge_control_end_threshold", config["end"])
+    write("charge_behaviour", config["behaviour"])
+    diagnostic = BATTERY / "device/oneplus_charge_control_status"
+    deadline = time.monotonic() + 8
+    while diagnostic.exists() and time.monotonic() < deadline:
+        fields = dict(item.split("=", 1) for item in diagnostic.read_text().split())
+        if fields.get("last_rc") == "0" and fields.get("pending") == "0":
+            return
+        time.sleep(0.1)
+    raise RuntimeError("控制请求尚未完成或校验失败；配置未保存，请检查 controller 状态")
+
+
+def save(config):
+    temporary = CONFIG.with_suffix(".new")
+    with temporary.open("w") as stream:
+        json.dump(config, stream, indent=2)
+        stream.write("\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+    temporary.replace(CONFIG)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Caihong 充电控制与电池健康")
+    parser.add_argument("--save", action="store_true", help="保存设置，启用服务后开机恢复")
+    commands = parser.add_subparsers(dest="command", required=True)
+    commands.add_parser("status", help="读取当前状态")
+    commands.add_parser("health", help="读取健康度、容量和循环次数")
+    limit = commands.add_parser("limit", help="设置恢复与停止阈值；停止阈值 100 表示不限制")
+    limit.add_argument("start", type=int)
+    limit.add_argument("end", type=int)
+    bypass = commands.add_parser("bypass", help="切换停充供电，不宣称电池完全隔离")
+    bypass.add_argument("mode", choices=MODES)
+    commands.add_parser("reset", help="恢复自动充电且不限制电量")
+    commands.add_parser("apply", help="应用保存的配置")
+    arguments = parser.parse_args()
+    if arguments.command in ("status", "health"):
+        print(json.dumps(status(), indent=2, ensure_ascii=False))
+        return
+    if os.geteuid() != 0:
+        raise PermissionError("请通过 sudo 执行修改操作")
+    if arguments.command == "apply":
+        config = validate(json.loads(CONFIG.read_text()))
+    else:
+        config = {"start": number("charge_control_start_threshold"),
+                  "end": number("charge_control_end_threshold"), "behaviour": behaviour()}
+        if arguments.command == "limit":
+            config.update(start=arguments.start, end=arguments.end)
+        elif arguments.command == "bypass":
+            config["behaviour"] = MODES[arguments.mode]
+        elif arguments.command == "reset":
+            config = {"start": 95, "end": 100, "behaviour": "auto"}
+    apply(config)
+    if arguments.save:
+        save(config)
+    print(json.dumps(status(), indent=2, ensure_ascii=False))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (OSError, ValueError, RuntimeError) as error:
+        print(f"caihong-charge: {error}", file=sys.stderr)
+        sys.exit(1)

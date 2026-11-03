@@ -1,0 +1,14 @@
+[Unit]
+Description=Restore Caihong charging preferences
+After=systemd-udev-trigger.service
+ConditionPathExists=/etc/caihong-charge.json
+ConditionPathExists=/sys/class/power_supply/qcom-battmgr-bat/charge_behaviour
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/sbin/caihong-charge apply
+RemainAfterExit=yes
+TimeoutStartSec=15
+
+[Install]
+WantedBy=multi-user.target
