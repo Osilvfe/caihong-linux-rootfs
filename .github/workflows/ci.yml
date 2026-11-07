@@ -21,6 +21,7 @@ jobs:
             packaging/linux-caihong/linux-caihong.install \
             config/armada.env
           python3 -m compileall -q scripts
+          python3 tools/test-rootfs-camera-policy.py
           shellcheck -x \
             scripts/build-boot-v2.sh \
             scripts/build-kernel-release.sh \

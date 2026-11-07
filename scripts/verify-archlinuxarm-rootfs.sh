@@ -418,8 +418,8 @@ if grep -q '^ConditionPathExists=.*/kwinoutputconfig.json$' \
 fi
 
 required_packages='bluez bluez-utils openssh networkmanager hostapd dnsmasq nftables pipewire
-pipewire-pulse wireplumber alsa-utils iio-sensor-proxy libssc libcamera
-libcamera-ipa libcamera-tools gst-plugin-libcamera plasma-camera krita firefox
+pipewire-pulse wireplumber alsa-utils iio-sensor-proxy libssc
+gst-plugin-libcamera plasma-camera krita firefox
 python-jinja python-ply python-yaml qt6-tools'
 package_db=$target/var/lib/pacman/local
 for package in $required_packages; do
