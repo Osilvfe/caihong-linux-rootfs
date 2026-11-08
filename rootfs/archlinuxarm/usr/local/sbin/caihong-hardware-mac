@@ -5,16 +5,152 @@ set -euo pipefail
 
 readonly reader=/usr/local/libexec/caihong-nvram-mac
 
-wait_for_path()
+valid_mac()
 {
-	local path=$1
+	local address=${1,,}
+
+	[[ $address =~ ^([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}$ ]] &&
+		[[ $address != 00:00:00:00:00:00 ]] &&
+		(( (16#${address:0:2} & 1) == 0 ))
+}
+
+parse_mac_values()
+{
+	local name value
+	parsed_wlan=
+	parsed_bluetooth=
+
+	while IFS='=' read -r name value || [[ -n $name ]]; do
+		[[ -z $name || $name == \#* ]] && continue
+		case $name in
+		WLAN_MAC|BLUETOOTH_MAC)
+			if [[ -n $value ]] && ! valid_mac "$value"; then
+				echo "invalid $name address" >&2
+				return 1
+			fi
+			case $name in
+			WLAN_MAC) parsed_wlan=${value,,} ;;
+			BLUETOOTH_MAC) parsed_bluetooth=${value,,} ;;
+			esac
+			;;
+		*)
+			echo "unrecognized MAC configuration field" >&2
+			return 1
+			;;
+		esac
+	done
+	if [[ -n $parsed_wlan && $parsed_wlan == "$parsed_bluetooth" ]]; then
+		echo "WLAN and Bluetooth addresses must differ" >&2
+		return 1
+	fi
+}
+
+random_mac()
+{
+	local -a octets
+	read -r -a octets <<< "$(od -An -N6 -tx1 /dev/urandom)"
+	[[ ${#octets[@]} == 6 ]] || return 1
+	printf '%02x:%s:%s:%s:%s:%s\n' "$(( (16#${octets[0]} | 2) & 254 ))" \
+		"${octets[@]:1}"
+}
+
+fallback_mac_values()
+(
+	local state_directory=$1
+	local addresses=$state_directory/addresses
+	local saved_wlan saved_bluetooth temporary address_lock
+
+	umask 077
+	mkdir -p -- "$state_directory" || exit 1
+	chmod 0700 "$state_directory" || exit 1
+	exec {address_lock}> "$state_directory/.lock"
+	flock "$address_lock" || exit 1
+	if [[ -e $addresses ]]; then
+		if ! parse_mac_values < "$addresses" ||
+			[[ -z $parsed_wlan || -z $parsed_bluetooth ]]; then
+			echo "invalid saved MAC addresses in $addresses; not replacing them" >&2
+			exit 1
+		fi
+		saved_wlan=$parsed_wlan
+		saved_bluetooth=$parsed_bluetooth
+	else
+		saved_wlan=$(random_mac) || exit 1
+		saved_bluetooth=$(random_mac) || exit 1
+		while [[ $saved_wlan == "$saved_bluetooth" ]]; do
+			saved_bluetooth=$(random_mac) || exit 1
+		done
+		temporary=$(mktemp "$state_directory/.addresses.XXXXXX") || exit 1
+		trap 'rm -f -- "$temporary"' EXIT
+		printf 'WLAN_MAC=%s\nBLUETOOTH_MAC=%s\n' \
+			"$saved_wlan" "$saved_bluetooth" > "$temporary" || exit 1
+		mv -f -- "$temporary" "$addresses" || exit 1
+	fi
+	printf 'WLAN_MAC=%s\nBLUETOOTH_MAC=%s\n' "$saved_wlan" "$saved_bluetooth"
+)
+
+wait_for_nvram()
+{
+	local directory=$1
 	local attempts=150
 
-	while [[ ! -e $path && $attempts -gt 0 ]]; do
+	while (( attempts > 0 )); do
+		[[ -e $directory/nonmodemst1 || -e $directory/nonmodemst2 ]] && return 0
 		sleep 0.1
-		((attempts--))
+		attempts=$((attempts - 1))
 	done
-	[[ -e $path ]]
+	return 1
+}
+
+resolve_mac_values()
+{
+	local configuration=$1
+	local state_directory=$2
+	local nvram_reader=$3
+	local nvram_directory=$4
+	local mac_values wlan_source=configuration bluetooth_source=configuration
+	wlan_mac=
+	bluetooth_mac=
+
+	if [[ -e $configuration ]]; then
+		parse_mac_values < "$configuration" || return 1
+		wlan_mac=$parsed_wlan
+		bluetooth_mac=$parsed_bluetooth
+	fi
+	if [[ -z $wlan_mac || -z $bluetooth_mac ]]; then
+		if wait_for_nvram "$nvram_directory" &&
+			mac_values=$("$nvram_reader" "$nvram_directory/nonmodemst1" \
+				"$nvram_directory/nonmodemst2") &&
+			parse_mac_values <<< "$mac_values" &&
+			[[ -n $parsed_wlan && -n $parsed_bluetooth ]]; then
+			if [[ -z $wlan_mac ]]; then
+				wlan_mac=$parsed_wlan
+				wlan_source=NVRAM
+			fi
+			if [[ -z $bluetooth_mac ]]; then
+				bluetooth_mac=$parsed_bluetooth
+				bluetooth_source=NVRAM
+			fi
+		else
+			echo "factory NVRAM addresses unavailable; using persistent fallback where needed" >&2
+		fi
+	fi
+	if [[ -z $wlan_mac || -z $bluetooth_mac ]]; then
+		mac_values=$(fallback_mac_values "$state_directory") || return 1
+		parse_mac_values <<< "$mac_values" || return 1
+		if [[ -z $wlan_mac ]]; then
+			wlan_mac=$parsed_wlan
+			wlan_source='persistent fallback'
+		fi
+		if [[ -z $bluetooth_mac ]]; then
+			bluetooth_mac=$parsed_bluetooth
+			bluetooth_source='persistent fallback'
+		fi
+	fi
+	if [[ $wlan_mac == "$bluetooth_mac" ]]; then
+		echo "WLAN and Bluetooth addresses must differ" >&2
+		return 1
+	fi
+	echo "WLAN address source: $wlan_source; Bluetooth address source: $bluetooth_source" >&2
 }
 
 bluetooth_address()
@@ -31,7 +167,7 @@ wait_for_bluetooth_address()
 
 	while (( attempts > 0 )); do
 		address=$(bluetooth_address || true)
-		if [[ $address =~ ^([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}$ ]] &&
+		if valid_mac "$address" &&
 			{ [[ -z $expected ]] || [[ ${address,,} == "${expected,,}" ]]; }; then
 			printf '%s\n' "$address"
 			return 0
@@ -49,7 +185,7 @@ wait_for_bluetooth_state()
 
 	while (( attempts > 0 )); do
 		address=$(bluetooth_address || true)
-		if [[ $address =~ ^([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}$ ]]; then
+		if valid_mac "$address"; then
 			printf '%s\n' "$address"
 			return 0
 		fi
@@ -117,20 +253,38 @@ normalize_network_profiles()
 	done
 }
 
-wait_for_path /dev/disk/by-partlabel/nonmodemst1
-wait_for_path /dev/disk/by-partlabel/nonmodemst2
+apply_bluetooth_address()
+{
+	local bluetooth_mac=$1
+	local current_bluetooth was_powered=0
 
-mac_values=$($reader)
-while IFS='=' read -r name value; do
-	case $name in
-	WLAN_MAC) wlan_mac=$value ;;
-	BLUETOOTH_MAC) bluetooth_mac=$value ;;
-	esac
-done <<< "$mac_values"
+	if ! current_bluetooth=$(wait_for_bluetooth_state); then
+		echo "Bluetooth controller did not become ready" >&2
+		return 1
+	fi
+	if [[ $current_bluetooth == unconfigured ]]; then
+		btmgmt --index hci0 public-addr "$bluetooth_mac" || return 1
+		wait_for_bluetooth_address "$bluetooth_mac" >/dev/null || return 1
+	elif [[ ${current_bluetooth,,} != "${bluetooth_mac,,}" ]]; then
+		if btmgmt --index hci0 info | grep -q 'current settings:.* powered'; then
+			was_powered=1
+		fi
+		btmgmt --index hci0 power off || return 1
+		btmgmt --index hci0 public-addr "$bluetooth_mac" || return 1
+		wait_for_bluetooth_address "$bluetooth_mac" >/dev/null || return 1
+		if (( was_powered )); then
+			btmgmt --index hci0 power on || return 1
+		fi
+	fi
+	echo "Bluetooth hci0: $bluetooth_mac"
+}
 
-[[ ${wlan_mac:-} =~ ^([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}$ ]]
-[[ ${bluetooth_mac:-} =~ ^([[:xdigit:]]{2}:){5}[[:xdigit:]]{2}$ ]]
-[[ $wlan_mac != "$bluetooth_mac" ]]
+if [[ ${BASH_SOURCE[0]} != "$0" ]]; then
+	return 0
+fi
+
+resolve_mac_values /etc/caihong-hardware-mac.conf \
+	/var/lib/caihong-hardware-mac "$reader" /dev/disk/by-partlabel
 
 if ! wifi_interface=$(find_wifi_interface); then
 	echo "no WLAN interface found" >&2
@@ -152,25 +306,6 @@ fi
 
 normalize_network_profiles "$wifi_interface"
 
-if ! current_bluetooth=$(wait_for_bluetooth_state); then
-	echo "Bluetooth controller did not become ready" >&2
-	exit 1
-fi
-if [[ $current_bluetooth == unconfigured ]]; then
-	btmgmt --index hci0 public-addr "$bluetooth_mac"
-	current_bluetooth=$(wait_for_bluetooth_address "$bluetooth_mac")
-elif [[ ${current_bluetooth,,} != "${bluetooth_mac,,}" ]]; then
-	was_powered=0
-	if btmgmt --index hci0 info | grep -q 'current settings:.* powered'; then
-		was_powered=1
-	fi
-	btmgmt --index hci0 power off
-	btmgmt --index hci0 public-addr "$bluetooth_mac"
-	current_bluetooth=$(wait_for_bluetooth_address "$bluetooth_mac")
-	if (( was_powered )); then
-		btmgmt --index hci0 power on
-	fi
-fi
+apply_bluetooth_address "$bluetooth_mac"
 
 echo "WLAN $wifi_interface: $wlan_mac"
-echo "Bluetooth hci0: $bluetooth_mac"

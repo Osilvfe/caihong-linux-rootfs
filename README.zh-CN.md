@@ -236,7 +236,7 @@ root 权限。
 | `caihong-slot` | 查看或切换 A/B 槽：`sudo caihong-slot status`、`sudo caihong-slot android --reboot`。 |
 | `caihong-flashlight` | 控制后置手电筒：`sudo caihong-flashlight on 40`、`status` 或 `off`。 |
 | `caihong-hotspot` | 在保持 STA 连接的同时启动热点：`sudo caihong-hotspot start`；还支持 `status`、`stop` 和 `regulatory {show\|set CODE\|reset}`。配置文件为 `/etc/caihong-hotspot.conf`。 |
-| `caihong-hardware-mac` | 从设备冗余 NVRAM 读取并在启动时应用原厂 WLAN 与蓝牙地址。 |
+| `caihong-hardware-mac` | 启动时应用 WLAN 与蓝牙地址；优先使用手动配置或认证通过的原厂 NVRAM，读取失败时使用持久化备用地址。 |
 | `caihong-npu-info` | `sudo caihong-npu-info` 显示 CDSP 固件状态和 FastRPC 能力；`--self-test` 验证通用 v75 DSP 执行，`--htp-self-test` 验证浮点 QAIRT/QNN 图，`--htp-conv-self-test` 验证量化 Conv2d 并与 CPU 参考结果逐元素比较。 |
 | `caihong-bluetooth-autostart` | 启动时打开已经配置地址的蓝牙控制器。 |
 | `caihong-charge` | 使用 `status` / `health` 读取电池状态和固件健康数据；`sudo caihong-charge limit 75 80` 设置充电阈值，`sudo caihong-charge bypass on` / `off` 控制停充并保留适配器输入，不承诺电池完全隔离。 |
@@ -255,6 +255,33 @@ rootfs 还包含 Caihong SSC 服务、定制 libcamera、Plasma Camera 集成、
 默认自动充电，不额外限制电量。只有显式使用 `--save` 保存设置并启用
 `caihong-charge.service` 才会在开机时恢复；该服务默认不启用。
 固件报告的健康度和容量不是独立测得的电池损耗。
+
+### WLAN 与蓝牙地址回退
+
+`caihong-hardware-mac` 分别按以下优先级选择 WLAN 与蓝牙地址：
+
+1. 可选配置文件 `/etc/caihong-hardware-mac.conf` 中人工确认的地址。
+   可以只设置其中一项；该文件不会作为 shell 脚本执行。
+2. 冗余 NVRAM 中通过完整认证的原厂地址。
+3. 首次需要时生成的两个不同的本地管理单播地址，保存在
+   `/var/lib/caihong-hardware-mac/addresses`，以后启动重复使用，不会每次随机更换。
+
+手动配置格式如下，地址仅为示例，请换成本机地址，勿多机共用：
+
+```ini
+WLAN_MAC=02:12:34:56:78:90
+BLUETOOTH_MAC=02:12:34:56:78:91
+```
+
+地址使用六组十六进制、冒号分隔，不加引号，等号两侧不留空格，两个地址不能相同。
+保存后重启生效。
+
+备用地址不是恢复出的原厂地址，不会写回 `nonmodemst1/2`，也不会绕过 NVRAM 认证。
+若要恢复原厂地址，可先从同机原厂 Android 或已配对主机的历史记录核对，再填入配置文件；
+不要直接使用别台设备或固件中的通用示例地址。
+配置或已保存地址损坏时会报错，不会静默更换蓝牙身份。
+请保留备用地址文件；删除它、重装系统或改回原厂地址可能需要重新配对。
+应用地址会中断 WLAN 或蓝牙连接，首次验证应在本机终端进行，不要依赖当前 SSH 会话。
 
 ## 内核升级
 

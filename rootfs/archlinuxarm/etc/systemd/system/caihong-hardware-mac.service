@@ -7,7 +7,7 @@ Before=NetworkManager.service
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/caihong-hardware-mac
-TimeoutStartSec=60
+TimeoutStartSec=120
 RemainAfterExit=yes
 
 [Install]

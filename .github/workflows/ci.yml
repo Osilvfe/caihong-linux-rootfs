@@ -23,6 +23,7 @@ jobs:
           python3 -m compileall -q scripts
           python3 tools/test-rootfs-camera-policy.py
           python3 tools/test-rootfs-runtime.py
+          python3 tools/test-hardware-mac.py
           shellcheck -x \
             scripts/build-boot-v2.sh \
             scripts/build-kernel-release.sh \

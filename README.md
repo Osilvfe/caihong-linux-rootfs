@@ -242,7 +242,7 @@ Commands that change hardware or boot state require root privileges.
 | `caihong-slot` | Inspect or switch A/B slots: `sudo caihong-slot status`, `sudo caihong-slot android --reboot`. |
 | `caihong-flashlight` | Control the rear torch: `sudo caihong-flashlight on 40`, `status`, or `off`. |
 | `caihong-hotspot` | Run the concurrent Wi-Fi AP without disconnecting the STA: `sudo caihong-hotspot start`; also provides `status`, `stop`, and `regulatory {show\|set CODE\|reset}`. Configure it in `/etc/caihong-hotspot.conf`. |
-| `caihong-hardware-mac` | Reads the factory WLAN and Bluetooth addresses from the redundant device NVRAM and applies them during boot. |
+| `caihong-hardware-mac` | Applies WLAN and Bluetooth addresses at boot, preferring explicit configuration or authenticated factory NVRAM and using persistent fallback addresses if NVRAM cannot be read. |
 | `caihong-npu-info` | `sudo caihong-npu-info` reports CDSP firmware state and FastRPC capabilities. `--self-test` verifies generic v75 DSP execution; `--htp-self-test` verifies a float QAIRT/QNN graph; `--htp-conv-self-test` verifies quantized Conv2d against a CPU reference. |
 | `caihong-bluetooth-autostart` | Powers on the configured Bluetooth controller during boot. |
 | `caihong-charge` | Reads battery status and firmware health values with `status` / `health`; `sudo caihong-charge limit 75 80` sets charging thresholds, and `sudo caihong-charge bypass on` / `off` controls charging inhibition without disconnecting the adapter. This does not guarantee battery isolation. |
