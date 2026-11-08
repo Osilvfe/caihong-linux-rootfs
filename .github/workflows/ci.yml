@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install validation tools
-        run: sudo apt-get update && sudo apt-get install -y desktop-file-utils shellcheck
+        run: sudo apt-get update && sudo apt-get install -y desktop-file-utils libarchive-tools shellcheck
       - name: Validate scripts
         run: |
           set -euo pipefail
@@ -22,6 +22,7 @@ jobs:
             config/armada.env
           python3 -m compileall -q scripts
           python3 tools/test-rootfs-camera-policy.py
+          python3 tools/test-rootfs-runtime.py
           shellcheck -x \
             scripts/build-boot-v2.sh \
             scripts/build-kernel-release.sh \

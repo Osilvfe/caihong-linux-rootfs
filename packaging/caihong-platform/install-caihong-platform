@@ -29,6 +29,13 @@ for tool in awk bsdtar cat cp dirname find grep mkdir mktemp mv readlink rm rmdi
 done
 
 work_dir=$(mktemp -d "${TMPDIR:-/tmp}/caihong-platform.XXXXXX") || exit 1
+
+cleanup()
+{
+	rm -rf "$work_dir"
+}
+trap cleanup EXIT HUP INT TERM
+
 target_root=$(cd -- "$target_root" && pwd)
 if [ "$rollback_only" -eq 1 ]; then
 	case $component in
@@ -60,12 +67,6 @@ if [ "$rollback_only" -eq 1 ]; then
 	fi
 	exit 0
 fi
-
-cleanup()
-{
-	rm -rf "$work_dir"
-}
-trap cleanup EXIT HUP INT TERM
 
 payload="$work_dir/payload"
 installed="$work_dir/installed"
@@ -166,6 +167,9 @@ while IFS= read -r entry; do
 	path=${entry#./}
 	case $path in
 		usr/share/caihong-package/*) continue ;;
+		etc/systemd/*)
+			destination=$target_root/var/lib/caihong-config-pending/$component/$path
+			;;
 		etc/*) destination=$target_root/$path.caihong-new ;;
 		*) destination=$target_root/$path ;;
 	esac
@@ -198,4 +202,5 @@ trap - HUP INT TERM
 cleanup
 
 echo "installed Caihong component $component $version"
+echo "Systemd configuration candidates require manual review under /var/lib/caihong-config-pending/$component/etc/systemd."
 echo "New configuration files ending in .caihong-new require manual review."

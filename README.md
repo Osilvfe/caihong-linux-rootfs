@@ -296,11 +296,13 @@ sudo /usr/libexec/caihong-platform/install-caihong-platform \
   ./caihong-npu-<version>-lib.tar.zst
 ```
 
-The installer verifies the manifest, stages each file, backs up overwritten
-files under `/var/lib/caihong-packages/<component>/previous`, and leaves files
-under `/etc` as `<file>.caihong-new` for explicit review. On Armada, use
-`caihong-platform-armada-<version>.tar.zst`. To restore the previous files, run
-`install-caihong-platform --rollback <component>`.
+安装器校验清单，并将被覆盖文件备份到
+`/var/lib/caihong-packages/<component>/previous`。`/etc/systemd` 的候选配置保存到
+`/var/lib/caihong-config-pending/<component>/etc/systemd`，不会自动启用服务，也不会在
+systemd 扫描的依赖目录中生成无效的 `.caihong-new` 链接；其他 `/etc` 配置仍以
+`<file>.caihong-new` 保存，需手动审阅。旧版本遗留的候选文件不会自动删除，应在备份后
+单独整理。Armada 使用 `caihong-platform-armada-<version>.tar.zst`；需要恢复前一版文件时，
+执行 `install-caihong-platform --rollback <component>`。
 
 The kernel RPM is included in the same update bundle. Armada is Fedora-based:
 install `caihong-platform-armada-<version>.tar.zst` with the transactional

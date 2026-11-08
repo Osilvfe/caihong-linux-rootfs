@@ -172,6 +172,7 @@ packages=(
 	pipewire
 	pipewire-pulse
 	wireplumber
+	rtkit
 	alsa-utils
 	v4l-utils
 	iio-sensor-proxy

@@ -99,6 +99,8 @@ usr/lib/linux-caihong/boot-userdata.img
 usr/lib/linux-caihong/install-current-slot
 usr/lib/linux-caihong/kernel-release
 usr/lib/modules-load.d/caihong.conf
+usr/lib/systemd/system/rtkit-daemon.service
+usr/share/dbus-1/system-services/org.freedesktop.RealtimeKit1.service
 usr/bin/cam
 usr/bin/plasma-camera
 usr/bin/qcam
@@ -418,7 +420,7 @@ if grep -q '^ConditionPathExists=.*/kwinoutputconfig.json$' \
 fi
 
 required_packages='bluez bluez-utils openssh networkmanager hostapd dnsmasq nftables pipewire
-pipewire-pulse wireplumber alsa-utils iio-sensor-proxy libssc
+pipewire-pulse wireplumber rtkit alsa-utils iio-sensor-proxy libssc
 gst-plugin-libcamera plasma-camera krita firefox
 python-jinja python-ply python-yaml qt6-tools'
 package_db=$target/var/lib/pacman/local
