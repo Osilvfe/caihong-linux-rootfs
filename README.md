@@ -326,9 +326,12 @@ sudo -E env CHROOT_TOOL=chroot MODULE_TREE="$PWD/modules-current" \
 
 GitHub Actions performs native AArch64 builds and persists ccache between
 runs. Every Release description records the resolved component commits.
-The unified release workflow builds both rootfs images in parallel; its
-artifact name starts with `caihong-armada-` and its rootfs filename starts
-with `caihong-armada-rootfs-`.
+The unified release workflow builds both rootfs images in parallel; Armada
+rootfs filenames start with `caihong-armada-rootfs-`. Actions artifacts are
+uploaded as individual release files without ZIP wrapping and retained for
+3 days, so boot images, rootfs images and update packages can be downloaded
+separately. Existing `.zst` compression and splitting are unchanged; a split
+rootfs still requires every part from the same build.
 
 ## Licensing
 

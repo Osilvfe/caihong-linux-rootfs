@@ -347,14 +347,25 @@ jobs:
             cat release/ARMADA_NOTES.md
           } > release/RELEASE_NOTES.md
 
-      - name: Upload full release bundle
-        uses: actions/upload-artifact@v4
+      - name: Install artifact uploader
+        run: |
+          npm install --prefix build/artifact-uploader --no-save --package-lock=false \
+            --ignore-scripts --no-audit --no-fund @actions/artifact@6.3.1
+
+      - name: Upload individual release files without ZIP wrapping
+        uses: actions/github-script@v8
         with:
-          name: caihong-release-${{ github.run_id }}
-          path: release/assets/*
-          if-no-files-found: error
-          compression-level: 0
-          retention-days: 3
+          script: |
+            const {pathToFileURL} = require('node:url');
+            const {resolve} = require('node:path');
+            const load = relative => import(pathToFileURL(resolve(process.env.GITHUB_WORKSPACE, relative)).href);
+            const {DefaultArtifactClient} = await load('build/artifact-uploader/node_modules/@actions/artifact/lib/artifact.js');
+            const {uploadReleaseArtifacts} = await load('scripts/upload-release-artifacts.mjs');
+            const artifacts = await uploadReleaseArtifacts(new DefaultArtifactClient(), 'release/assets');
+            const run = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            await core.summary.addHeading('按需下载构建产物').addList(artifacts.map(artifact =>
+              `<a href="${run}/artifacts/${artifact.id}">${artifact.name}</a>`
+            )).write();
 
       - name: Publish GitHub release
         if: github.event_name == 'push' || inputs.publish_release

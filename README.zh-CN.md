@@ -340,8 +340,10 @@ sudo -E env CHROOT_TOOL=chroot MODULE_TREE="$PWD/modules-current" \
 
 GitHub Actions 使用原生 AArch64 构建，并在不同运行之间保存 ccache。每个
 Release 说明都会记录实际使用的各组件提交。统一发布工作流会并行构建两份
-rootfs；Armada artifact 名称以 `caihong-armada-` 开头，rootfs 文件名以
-`caihong-armada-rootfs-` 开头。
+rootfs；Armada rootfs 文件名以 `caihong-armada-rootfs-` 开头。
+Actions artifacts 按发布文件逐个原样上传，不再合并成一个 ZIP，可按需下载
+启动镜像、对应发行版的 rootfs 或更新包，保留 3 天。已有的 `.zst` 压缩和分卷格式不变；
+分卷 rootfs 仍需下载同一套的全部分卷。
 
 ## 许可证
 
