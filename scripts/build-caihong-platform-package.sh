@@ -82,6 +82,10 @@ if [ "$distribution" = armada ]; then
 		"$stage/etc/systemd/system/caihong-grow-rootfs.service"
 fi
 
+if [ "$distribution" = archlinuxarm ]; then
+	"$project_dir/scripts/install-caihong-toolbox-rootfs.sh" "$stage" >/dev/null
+fi
+
 (
 	cd "$project_dir/firmware" && sha256sum -c SHA256SUMS >/dev/null
 )

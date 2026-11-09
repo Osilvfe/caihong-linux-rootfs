@@ -104,6 +104,16 @@ usr/share/dbus-1/system-services/org.freedesktop.RealtimeKit1.service
 usr/bin/cam
 usr/bin/plasma-camera
 usr/bin/qcam
+usr/bin/caihong-toolbox
+usr/lib/caihong-toolbox/caihong-toolbox-service
+usr/lib/caihong-toolbox/caihong_toolbox/gui.py
+usr/lib/systemd/system/caihong-toolbox.service
+usr/share/dbus-1/system-services/org.caihong.Toolbox1.service
+usr/share/dbus-1/system.d/org.caihong.Toolbox1.conf
+usr/share/polkit-1/actions/org.caihong.toolbox.policy
+usr/share/applications/caihong-toolbox.desktop
+usr/share/icons/hicolor/scalable/apps/caihong-toolbox.svg
+usr/share/caihong/toolbox-build-info
 usr/lib/gstreamer-1.0/libgstlibcamera.so
 usr/lib/libcamera-base.so.0.7.2
 usr/lib/libcamera.so.0.7

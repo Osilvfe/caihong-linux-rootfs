@@ -40,7 +40,7 @@ development release for this device; review the status table before installing.
 - `linux-caihong-<version>-1.aarch64.rpm`: RPM package for Fedora-based Armada
   containing the same kernel payload.
 - `caihong-platform-archlinuxarm-<version>.tar.zst`: incremental update payload
-  for Caihong services, firmware, tools and device integration.
+  for Caihong services, firmware, tools, Caihong Toolbox and device integration.
 - `caihong-npu-<version>-lib[64].tar.zst`: incremental update payload for the
   Qualcomm NPU runtime and Hexagon DSP components.
 
@@ -254,10 +254,11 @@ Commands that change hardware or boot state require root privileges.
 | `caihong-clean-pogo-kde` | Removes KDE keyboard-backlight actions that do not apply to the Pogo keyboard. |
 | `caihong-nvram-mac` | Internal `/usr/local/libexec` reader used by `caihong-hardware-mac`. |
 | `caihong-switch-to-android.desktop` | Plasma application-menu entry that runs `caihong-slot android --reboot` through polkit. |
+| `caihong-toolbox` | Opens the Caihong graphical settings tool from the application menu. Hardware changes go through its D-Bus/Polkit backend; the backend is not enabled as a boot service. |
 
 The rootfs also includes the Caihong SSC service, custom libcamera stack,
-Plasma Camera integration, firmware, audio topology and matching kernel
-modules.
+Plasma Camera integration, Caihong Toolbox, firmware, audio topology and
+matching kernel modules.
 
 Charging defaults to automatic operation with no extra charge limit. Settings
 persist only when explicitly saved with `--save` and restored by enabling

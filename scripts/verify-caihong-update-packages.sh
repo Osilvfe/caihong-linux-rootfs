@@ -67,6 +67,21 @@ verify_platform()
 			fail "$archive contains obsolete software ISP path: $path"
 		fi
 	done
+	if [[ $distribution == archlinuxarm ]]; then
+		for path in \
+			usr/bin/caihong-toolbox \
+			usr/lib/caihong-toolbox/caihong-toolbox-service \
+			usr/lib/caihong-toolbox/caihong_toolbox/gui.py \
+			usr/lib/systemd/system/caihong-toolbox.service \
+			usr/share/dbus-1/system-services/org.caihong.Toolbox1.service \
+			usr/share/dbus-1/system.d/org.caihong.Toolbox1.conf \
+			usr/share/polkit-1/actions/org.caihong.toolbox.policy \
+			usr/share/applications/caihong-toolbox.desktop \
+			usr/share/icons/hicolor/scalable/apps/caihong-toolbox.svg \
+			usr/share/caihong/toolbox-build-info; do
+			grep -Fqx "$path" <<<"$listing" || fail "$archive is missing $path"
+		done
+	fi
 }
 
 verify_npu()

@@ -6,6 +6,7 @@
 /release/
 /external/libcamera/
 /external/plasma-camera/
+/external/caihong-toolbox/
 /external/qbootctl/
 /external/mkbootimg/
 *.part

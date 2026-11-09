@@ -49,7 +49,7 @@ root=PARTLABEL=linux rootfstype=ext4 rootwait rw
 - `linux-caihong-<version>-1.aarch64.rpm`：供 Fedora 基础 Armada 使用的 RPM，
   内容与 pacman 包相同。
 - `caihong-platform-archlinuxarm-<version>.tar.zst`：Caihong 服务、固件、
-  工具和设备集成的增量更新载荷。
+  工具、Caihong Toolbox 和设备集成的增量更新载荷。
 - `caihong-npu-<version>-lib[64].tar.zst`：Qualcomm NPU 运行时与 Hexagon DSP
   组件的增量更新载荷。
 
@@ -248,9 +248,10 @@ root 权限。
 | `caihong-clean-pogo-kde` | 删除不适用于 Pogo 键盘的 KDE 键盘背光操作。 |
 | `caihong-nvram-mac` | 位于 `/usr/local/libexec` 的内部读取器，由 `caihong-hardware-mac` 调用。 |
 | `caihong-switch-to-android.desktop` | Plasma 应用菜单中的“切换到 Android”入口，通过 polkit 执行 `caihong-slot android --reboot`。 |
+| `caihong-toolbox` | 从应用菜单打开 Caihong 图形设置工具。硬件修改经其 D-Bus/Polkit 后台执行；后台不启用为开机服务。 |
 
-rootfs 还包含 Caihong SSC 服务、定制 libcamera、Plasma Camera 集成、设备固件、
-音频拓扑和匹配的内核模块。
+rootfs 还包含 Caihong SSC 服务、定制 libcamera、Plasma Camera 集成、
+Caihong Toolbox、设备固件、音频拓扑和匹配的内核模块。
 
 默认自动充电，不额外限制电量。只有显式使用 `--save` 保存设置并启用
 `caihong-charge.service` 才会在开机时恢复；该服务默认不启用。

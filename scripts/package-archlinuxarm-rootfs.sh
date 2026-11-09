@@ -129,6 +129,7 @@ packages=(
 	pahole
 	perl
 	python
+	pyside6
 	python-gobject
 	python-jinja
 	python-ply
@@ -148,6 +149,7 @@ packages=(
 	iw
 	bluez
 	bluez-utils
+	polkit
 	openssh
 	android-tools
 	usbutils
@@ -594,6 +596,9 @@ CHROOT_TOOL="$chroot_tool" \
 echo "building and installing Caihong Plasma Camera"
 CHROOT_TOOL="$chroot_tool" \
 	"$project_dir/scripts/install-caihong-plasma-camera-rootfs.sh" "$rootfs"
+
+echo "installing Caihong Toolbox"
+"$project_dir/scripts/install-caihong-toolbox-rootfs.sh" "$rootfs"
 
 echo "building the Caihong NVRAM MAC reader"
 install -D -m 0644 "$project_dir/tools/caihong-nvram-mac.c" \

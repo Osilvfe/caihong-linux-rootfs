@@ -63,6 +63,10 @@ if [ "$dependency_scope" = release ]; then
 		"$project_dir/external/libcamera" "$LIBCAMERA_REPOSITORY"
 	checkout PLASMA_CAMERA "$PLASMA_CAMERA_REF" \
 		"$project_dir/external/plasma-camera" "$PLASMA_CAMERA_REPOSITORY"
+fi
+checkout TOOLBOX "$TOOLBOX_REF" \
+	"$project_dir/external/caihong-toolbox" "$TOOLBOX_REPOSITORY"
+if [ "$dependency_scope" = release ]; then
 	checkout QBOOTCTL "$QBOOTCTL_REF" \
 		"$project_dir/external/qbootctl" "$QBOOTCTL_REPOSITORY"
 fi

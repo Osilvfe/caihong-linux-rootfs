@@ -35,6 +35,7 @@ jobs:
             scripts/checkout-dependencies.sh \
             scripts/install-caihong-adbd.sh \
             scripts/install-caihong-modules.sh \
+            scripts/install-caihong-toolbox-rootfs.sh \
             scripts/package-archlinuxarm-rootfs.sh \
             scripts/package-armada-rootfs.sh \
             scripts/verify-caihong-update-packages.sh \
