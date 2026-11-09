@@ -186,6 +186,8 @@ packages=(
 	plasma-camera
 	krita
 	firefox
+	libva
+	libdrm
 	power-profiles-daemon
 	upower
 	xdg-user-dirs
@@ -599,6 +601,10 @@ CHROOT_TOOL="$chroot_tool" \
 
 echo "installing Caihong Toolbox"
 "$project_dir/scripts/install-caihong-toolbox-rootfs.sh" "$rootfs"
+
+echo "building and installing Qualcomm Iris VA-API"
+CHROOT_TOOL="$chroot_tool" \
+	"$project_dir/scripts/install-caihong-vaapi-rootfs.sh" "$rootfs"
 
 echo "building the Caihong NVRAM MAC reader"
 install -D -m 0644 "$project_dir/tools/caihong-nvram-mac.c" \

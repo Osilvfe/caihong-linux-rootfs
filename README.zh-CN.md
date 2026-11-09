@@ -31,7 +31,7 @@ root=PARTLABEL=linux rootfstype=ext4 rootwait rw
 | USB 与外接显示 | 正常 | USB host/device 控制器和 DP Alt Mode 可用。 |
 | CPU 与休眠 | 正常 | CPU 调频以及 `s2idle` 和深度休眠恢复可用；唤醒后网络重连可能较慢。默认关闭 3.3024 GHz boost。 |
 | 电池与快充 | 基本正常 | 电量显示以及已测试的 PPS/VOOC 快充可用。VOOC 会按温度限制电流，进入快充时可能记录瞬时重试/故障消息；仍需持续监控。其他充电协议暂未适配。 |
-| NPU 与 VPU | 正常 | CDSP/HTP NPU 测试通过，包括 Hexagon v75、QNN 浮点和量化 Conv2d 负载。Iris VPU 的 H.264 和 HEVC 硬件解码通过混合负载回归；编码能力尚未验证。 |
+| NPU 与 VPU | 正常 | CDSP/HTP NPU 测试通过，包括 Hexagon v75、QNN 浮点和量化 Conv2d 负载。Iris VPU 的 H.264、HEVC、VP9 和 AV1 硬件解码可通过 V4L2 与 VA-API 使用；Firefox 和 Chrome 均走 VA-API。编码能力尚未验证。 |
 | 存储 | 正常 | UFS 存储可用，MCQ 已启用（实测日志为 9 个硬件队列、最大命令深度 64）。设备专属完整频率表仍待补充。 |
 
 

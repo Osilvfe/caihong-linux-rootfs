@@ -114,6 +114,9 @@ usr/share/polkit-1/actions/org.caihong.toolbox.policy
 usr/share/applications/caihong-toolbox.desktop
 usr/share/icons/hicolor/scalable/apps/caihong-toolbox.svg
 usr/share/caihong/toolbox-build-info
+usr/lib/dri/qcom_drv_video.so
+usr/lib/dri/msm_drv_video.so
+usr/share/caihong/vaapi-build-info
 usr/lib/gstreamer-1.0/libgstlibcamera.so
 usr/lib/libcamera-base.so.0.7.2
 usr/lib/libcamera.so.0.7
@@ -219,6 +222,13 @@ fi
 if ! grep -qx "source_commit=$plasma_camera_commit" \
 	"$target/usr/share/caihong/plasma-camera-build-info" 2>/dev/null; then
 	echo "rootfs Plasma Camera source commit does not match the workspace" >&2
+	failed=1
+fi
+
+qcom_va_commit=$(git -C "$project_dir/external/qcom-va-driver" rev-parse --verify HEAD)
+if ! grep -qx "source_commit=$qcom_va_commit" \
+	"$target/usr/share/caihong/vaapi-build-info" 2>/dev/null; then
+	echo "rootfs Qualcomm VA-API source commit does not match the workspace" >&2
 	failed=1
 fi
 

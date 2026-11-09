@@ -21,7 +21,7 @@ development release for this device; review the status table before installing.
 | USB and external display | Working | USB host/device controllers and DP Alt Mode work. |
 | CPU and suspend | Working | CPU frequency scaling and both `s2idle` and deep suspend/resume work. Network reconnect after resume can be slow. The 3.3024 GHz boost is disabled by default. |
 | Battery and fast charging | Mostly working | Battery reporting and tested PPS/VOOC charging work. VOOC applies thermal current limits and can report transient retry/fault messages during entry; monitoring remains necessary. Other charging protocols are not yet supported. |
-| NPU and VPU | Working | CDSP/HTP NPU tests pass, including Hexagon v75, QNN float and quantized Conv2d workloads. Iris VPU H.264 and HEVC hardware decoding passed mixed-load regression runs; encoder support is untested. |
+| NPU and VPU | Working | CDSP/HTP NPU tests pass, including Hexagon v75, QNN float and quantized Conv2d workloads. Iris VPU H.264, HEVC, VP9 and AV1 hardware decoding work through V4L2 and VA-API; Firefox and Chrome use the VA-API path. Encoder support is untested. |
 | Storage | Working | UFS storage works with MCQ enabled (9 hardware queues and a maximum command depth of 64 in validated logs). A device-specific full frequency table is still pending. |
 
 
