@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Caihong Flashlight Panel Applet
+Comment=Add the flashlight applet to the Plasma panel on first login
+Exec=/usr/bin/python3 /usr/local/sbin/caihong-flashlight-panel
+OnlyShowIn=KDE;
+NoDisplay=true
+X-KDE-autostart-after=panel

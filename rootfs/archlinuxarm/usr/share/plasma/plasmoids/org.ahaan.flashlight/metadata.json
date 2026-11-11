@@ -1,0 +1,12 @@
+{
+  "KPlugin": {
+    "Id": "org.ahaan.flashlight",
+    "Name": "Flashlight",
+    "Description": "Toggle the rear flashlight and set its intensity",
+    "Icon": "flashlight-on",
+    "Version": "1.1",
+    "License": "GPL-2.0-only"
+  },
+  "KPackageStructure": "Plasma/Applet",
+  "X-Plasma-API-Minimum-Version": "6.0"
+}

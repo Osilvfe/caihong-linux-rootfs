@@ -53,6 +53,9 @@ required_paths=(
 	usr/lib64/libcamera.so.0.7.2
 	usr/share/caihong/libcamera-build-info
 	usr/share/caihong/plasma-camera-build-info
+	etc/xdg/autostart/caihong-flashlight-panel.desktop
+	usr/share/plasma/plasmoids/org.ahaan.flashlight/metadata.json
+	usr/share/plasma/plasmoids/org.ahaan.flashlight/contents/ui/main.qml
 	etc/issue.d/20-caihong-armada.issue
 	usr/share/doc/caihong-armada/SOURCES-AND-LICENSES.md
 	usr/local/libexec/caihong-nvram-mac
@@ -86,6 +89,7 @@ required_paths=(
 	usr/local/sbin/qbootctl
 	usr/local/sbin/caihong-slot
 	usr/local/sbin/caihong-flashlight
+	usr/local/sbin/caihong-flashlight-panel
 	usr/local/sbin/caihong-hotspot
 	usr/local/sbin/caihong-pen-charge
 	usr/local/sbin/caihong-adbd-gadget
