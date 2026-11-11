@@ -235,6 +235,7 @@ root 权限。
 | --- | --- |
 | `caihong-slot` | 查看或切换 A/B 槽：`sudo caihong-slot status`、`sudo caihong-slot android --reboot`。 |
 | `caihong-flashlight` | 控制后置手电筒：`sudo caihong-flashlight on 40`、`status` 或 `off`。 |
+| `caihong-flashlight-panel` | 首次登录时将“手电筒”小程序添加到 Plasma 面板。`--status` 查看是否已添加，`--force` 在移除后重新添加。 |
 | `caihong-hotspot` | 在保持 STA 连接的同时启动热点：`sudo caihong-hotspot start`；还支持 `status`、`stop` 和 `regulatory {show\|set CODE\|reset}`。配置文件为 `/etc/caihong-hotspot.conf`。 |
 | `caihong-hardware-mac` | 启动时应用 WLAN 与蓝牙地址；优先使用手动配置或认证通过的原厂 NVRAM，读取失败时使用持久化备用地址。 |
 | `caihong-npu-info` | `sudo caihong-npu-info` 显示 CDSP 固件状态和 FastRPC 能力；`--self-test` 验证通用 v75 DSP 执行，`--htp-self-test` 验证浮点 QAIRT/QNN 图，`--htp-conv-self-test` 验证量化 Conv2d 并与 CPU 参考结果逐元素比较。 |
@@ -249,6 +250,11 @@ root 权限。
 | `caihong-nvram-mac` | 位于 `/usr/local/libexec` 的内部读取器，由 `caihong-hardware-mac` 调用。 |
 | `caihong-switch-to-android.desktop` | Plasma 应用菜单中的“切换到 Android”入口，通过 polkit 执行 `caihong-slot android --reboot`。 |
 | `caihong-toolbox` | 从应用菜单打开 Caihong 图形设置工具。硬件修改经其 D-Bus/Polkit 后台执行；后台不启用为开机服务。 |
+
+首次登录后，Plasma 面板会添加一个**手电筒**小程序，包含后置手电筒开关和亮度
+滑块。该小程序安装在系统目录中，因此也可以在**添加部件**中找到。每个用户只会
+自动添加一次；如果手动移除，之后登录不会再次添加。可用
+`caihong-flashlight-panel --force` 或“添加部件”重新添加。
 
 rootfs 还包含 Caihong SSC 服务、定制 libcamera、Plasma Camera 集成、
 Caihong Toolbox、设备固件、音频拓扑和匹配的内核模块。
