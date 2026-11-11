@@ -7,6 +7,7 @@
 /external/libcamera/
 /external/plasma-camera/
 /external/caihong-toolbox/
+/external/qcom-va-driver/
 /external/qbootctl/
 /external/mkbootimg/
 *.part

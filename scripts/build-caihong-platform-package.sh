@@ -84,6 +84,7 @@ fi
 
 if [ "$distribution" = archlinuxarm ]; then
 	"$project_dir/scripts/install-caihong-toolbox-rootfs.sh" "$stage" >/dev/null
+	"$project_dir/scripts/install-caihong-vaapi-stage.sh" "$stage" >/dev/null
 fi
 
 (

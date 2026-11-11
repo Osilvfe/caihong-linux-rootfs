@@ -32,7 +32,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             alsa-utils bc bison build-essential ccache curl dwarves file flex git \
-            kmod libarchive-tools libelf-dev libssl-dev python3 rpm rsync shellcheck zstd
+            kmod libarchive-tools libegl-dev libdrm-dev libelf-dev libgbm-dev \
+            libgles-dev libssl-dev libva-dev meson ninja-build pkg-config \
+            python3 rpm rsync shellcheck zstd
 
       - name: Resolve kernel dependencies
         run: DEPENDENCY_SCOPE=kernel scripts/checkout-dependencies.sh

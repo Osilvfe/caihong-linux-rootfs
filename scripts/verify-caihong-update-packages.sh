@@ -78,9 +78,15 @@ verify_platform()
 			usr/share/polkit-1/actions/org.caihong.toolbox.policy \
 			usr/share/applications/caihong-toolbox.desktop \
 			usr/share/icons/hicolor/scalable/apps/caihong-toolbox.svg \
-			usr/share/caihong/toolbox-build-info; do
+			usr/share/caihong/toolbox-build-info \
+			usr/lib/dri/qcom_drv_video.so \
+			usr/lib/dri/msm_drv_video.so \
+			usr/share/caihong/vaapi-build-info; do
 			grep -Fqx "$path" <<<"$listing" || fail "$archive is missing $path"
 		done
+		if [[ $(bsdtar -xOf "$archive" usr/share/caihong/vaapi-build-info) != *source_commit=* ]]; then
+			fail "$archive has no VA-API source revision metadata"
+		fi
 	fi
 }
 

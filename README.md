@@ -40,7 +40,8 @@ development release for this device; review the status table before installing.
 - `linux-caihong-<version>-1.aarch64.rpm`: RPM package for Fedora-based Armada
   containing the same kernel payload.
 - `caihong-platform-archlinuxarm-<version>.tar.zst`: incremental update payload
-  for Caihong services, firmware, tools, Caihong Toolbox and device integration.
+  for Caihong services, firmware, tools, Caihong Toolbox, the Qualcomm Iris
+  VA-API driver and device integration.
 - `caihong-npu-<version>-lib[64].tar.zst`: incremental update payload for the
   Qualcomm NPU runtime and Hexagon DSP components.
 

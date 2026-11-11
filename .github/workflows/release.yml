@@ -43,7 +43,9 @@ jobs:
           sudo apt-get install -y \
             alsa-utils android-sdk-libsparse-utils bc bison build-essential \
             ccache curl dwarves e2fsprogs flex git kmod libarchive-tools \
-            libelf-dev libssl-dev python3 rpm rsync shellcheck zstd
+            libegl-dev libelf-dev libgbm-dev libgles-dev libdrm-dev \
+            libssl-dev libva-dev meson ninja-build pkg-config python3 rpm \
+            rsync shellcheck zstd
 
       - name: Restore package downloads
         uses: actions/cache@v4
@@ -134,7 +136,9 @@ jobs:
           sudo apt-get install -y \
             alsa-utils android-sdk-libsparse-utils bc bison build-essential \
             ccache curl dwarves e2fsprogs flex git kmod libarchive-tools \
-            libelf-dev libssl-dev python3 rsync shellcheck zstd
+            libegl-dev libelf-dev libgbm-dev libgles-dev libdrm-dev \
+            libssl-dev libva-dev meson ninja-build pkg-config python3 rsync \
+            shellcheck zstd
 
       - name: Restore package downloads
         if: matrix.distribution == 'archlinuxarm'

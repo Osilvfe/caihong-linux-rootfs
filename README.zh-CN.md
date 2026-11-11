@@ -49,7 +49,7 @@ root=PARTLABEL=linux rootfstype=ext4 rootwait rw
 - `linux-caihong-<version>-1.aarch64.rpm`：供 Fedora 基础 Armada 使用的 RPM，
   内容与 pacman 包相同。
 - `caihong-platform-archlinuxarm-<version>.tar.zst`：Caihong 服务、固件、
-  工具、Caihong Toolbox 和设备集成的增量更新载荷。
+  工具、Caihong Toolbox、Qualcomm Iris VA-API 驱动和设备集成的增量更新载荷。
 - `caihong-npu-<version>-lib[64].tar.zst`：Qualcomm NPU 运行时与 Hexagon DSP
   组件的增量更新载荷。
 

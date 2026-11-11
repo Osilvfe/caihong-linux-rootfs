@@ -602,10 +602,6 @@ CHROOT_TOOL="$chroot_tool" \
 echo "installing Caihong Toolbox"
 "$project_dir/scripts/install-caihong-toolbox-rootfs.sh" "$rootfs"
 
-echo "building and installing Qualcomm Iris VA-API"
-CHROOT_TOOL="$chroot_tool" \
-	"$project_dir/scripts/install-caihong-vaapi-rootfs.sh" "$rootfs"
-
 echo "building the Caihong NVRAM MAC reader"
 install -D -m 0644 "$project_dir/tools/caihong-nvram-mac.c" \
 	"$rootfs/tmp/caihong-nvram-mac.c"
@@ -643,6 +639,28 @@ if [[ -n $npu_package ]]; then
 	CAIHONG_PLATFORM_ROOT="$rootfs" \
 	"$project_dir/packaging/caihong-platform/install-caihong-platform" \
 		"$rootfs/tmp/caihong-packages/${npu_package##*/}"
+fi
+
+# When a platform package is supplied, it carries the Qualcomm Iris VA-API
+# build that is also published for incremental updates.  Install that same
+# build instead of compiling a second copy inside the image, so a later device
+# update cannot silently replace the driver with different bytes.
+if [[ -n $platform_package ]]; then
+	echo "deferring Qualcomm Iris VA-API to the platform package"
+else
+	echo "building and installing Qualcomm Iris VA-API"
+	CHROOT_TOOL="$chroot_tool" \
+		"$project_dir/scripts/install-caihong-vaapi-rootfs.sh" "$rootfs"
+fi
+
+if [[ -n $platform_package ]]; then
+	for path in usr/lib/dri/qcom_drv_video.so usr/lib/dri/msm_drv_video.so \
+		usr/share/caihong/vaapi-build-info; do
+		if [[ ! -e $rootfs/$path && ! -L $rootfs/$path ]]; then
+			echo "platform package did not provide /$path" >&2
+			exit 1
+		fi
+	done
 fi
 
 echo "building and installing qbootctl"

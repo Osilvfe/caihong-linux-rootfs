@@ -70,7 +70,8 @@ chroot_env=(/usr/bin/env -i HOME=/root LANG=C PATH=/usr/local/sbin:/usr/local/bi
 "$chroot_tool" "$rootfs" "${chroot_env[@]}" \
 	meson setup "$build_dir" "$source_copy" \
 	--prefix=/usr --libdir=lib --buildtype=release \
-	-Dcdsp_vpp=disabled -Dvulkan_vpp=disabled -Dtests=false
+	-Dgpu_copy=enabled -Dcdsp_vpp=disabled -Dvulkan_vpp=disabled \
+	-Dtests=false
 "$chroot_tool" "$rootfs" "${chroot_env[@]}" \
 	meson compile -C "$build_dir"
 "$chroot_tool" "$rootfs" "${chroot_env[@]}" \
