@@ -17,6 +17,12 @@ The percentages are rounded down to the nearest supported OPP. Thermal
 throttling is still enforced by the kernel; the driver only lowers the
 userspace caps and never raises a thermal limit.
 
+## Testing
+
+Tested on the OnePlus Pad Pro: the driver works as intended, and selecting
+the `power-saver` profile noticeably reduces CPU heat compared with
+`balanced`.
+
 ## Tuning
 
 The power-saver caps can be changed without rebuilding by adding a systemd
