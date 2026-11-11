@@ -39,15 +39,42 @@ target_matches_name() {
 	esac
 }
 
-flash_nodes() {
+# A flash subdev exposes its name in sysfs (for example "white:flash"), so the
+# matching nodes can be found with one grep over the name files. Probing every
+# camera node with v4l2-ctl --all is only the fallback: on this device there are
+# 33 subdevices and each probe costs ~10 ms, which made interactive callers
+# (the Plasma widget slider) feel several seconds behind.
+flash_nodes_from_names() {
+	grep -liE '(^|:)flash(-[0-9]+)?$' /sys/class/video4linux/*/name 2>/dev/null |
+	while IFS= read -r name_file; do
+		name=$(cat "$name_file" 2>/dev/null || true)
+		target_matches_name "$name" || continue
+		node=${name_file%/name}
+		node=/dev/${node##*/}
+		[ -e "$node" ] || continue
+		printf '%s\n' "$node"
+	done
+	return 0
+}
+
+flash_nodes_from_probe() {
 	for node in /dev/v4l-subdev*; do
 		[ -e "$node" ] || continue
 		name=$(cat "/sys/class/video4linux/${node##*/}/name" 2>/dev/null || true)
-	target_matches_name "$name" || continue
+		target_matches_name "$name" || continue
 		if v4l2-ctl -d "$node" --all 2>/dev/null | grep -q '^Flash Controls'; then
 			echo "$node"
 		fi
 	done
+}
+
+flash_nodes() {
+	nodes=$(flash_nodes_from_names)
+	if [ -n "$nodes" ]; then
+		printf '%s\n' "$nodes"
+	else
+		flash_nodes_from_probe
+	fi
 }
 
 sysfs_flash_nodes() {
