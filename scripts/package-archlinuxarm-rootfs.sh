@@ -188,7 +188,7 @@ packages=(
 	firefox
 	libva
 	libdrm
-	power-profiles-daemon
+	libgudev
 	upower
 	xdg-user-dirs
 	noto-fonts
@@ -521,6 +521,61 @@ rsync -aHAX --numeric-ids --chown=0:0 \
 	"$project_dir/rootfs/archlinuxarm/" "$rootfs/"
 rm -f -- "$rootfs/etc/alsa/state-daemon.conf"
 
+# PowerDevil only recommends power-profiles-daemon, so the stock package is not
+# pulled in by the package list above.  Build the patched daemon inside the
+# native AArch64 rootfs instead: it needs the same GLib/GUdev/Polkit/UPower
+# headers as the host build, and this keeps the package registered with pacman.
+echo "building and installing the Caihong power-profiles-daemon package"
+ppd_source=$project_dir/external/power-profiles-daemon
+ppd_patch=$project_dir/packaging/power-profiles-daemon-caihong/0001-qcom-cpufreq.patch
+ppd_builder=$project_dir/packaging/power-profiles-daemon-caihong/build-rootfs-package.sh
+if [[ ! -f $ppd_source/meson.build ]]; then
+	echo "missing power-profiles-daemon source; run scripts/checkout-dependencies.sh" >&2
+	exit 1
+fi
+rm -rf -- "$rootfs/tmp/power-profiles-daemon"
+rsync -a --exclude=.git --exclude=build \
+	"$ppd_source/" "$rootfs/tmp/power-profiles-daemon/"
+install -m 0644 "$ppd_patch" "$rootfs/tmp/power-profiles-daemon-qcom.patch"
+install -m 0755 "$ppd_builder" "$rootfs/tmp/build-power-profiles-daemon-package.sh"
+"$chroot_tool" "$rootfs" "${chroot_env[@]}" \
+	/tmp/build-power-profiles-daemon-package.sh \
+	/tmp/power-profiles-daemon /tmp/power-profiles-daemon-qcom.patch /tmp
+ppd_pointer=$rootfs/tmp/POWER_PROFILES_DAEMON_PACKAGE
+if [[ ! -f $ppd_pointer ]]; then
+	echo "power-profiles-daemon package pointer was not created" >&2
+	exit 1
+fi
+ppd_package_name=$(<"$ppd_pointer")
+ppd_package=$rootfs/tmp/$ppd_package_name
+if [[ ! -f $ppd_package ]]; then
+	echo "power-profiles-daemon package was not created: $ppd_package_name" >&2
+	exit 1
+fi
+# An input archive from an older build can still carry the stock package.
+if "$chroot_tool" "$rootfs" "${chroot_env[@]}" \
+	pacman -Qq power-profiles-daemon >/dev/null 2>&1; then
+	"$chroot_tool" "$rootfs" "${chroot_env[@]}" \
+		pacman -Rdd --noconfirm power-profiles-daemon
+fi
+"$chroot_tool" "$rootfs" "${chroot_env[@]}" \
+	pacman -U --noconfirm "/tmp/$ppd_package_name"
+if ! "$chroot_tool" "$rootfs" "${chroot_env[@]}" \
+	pacman -Qq power-profiles-daemon-caihong >/dev/null; then
+	echo "power-profiles-daemon-caihong was not registered in the package database" >&2
+	exit 1
+fi
+if "$chroot_tool" "$rootfs" "${chroot_env[@]}" \
+	pacman -Qq power-profiles-daemon >/dev/null 2>&1; then
+	echo "stock power-profiles-daemon is still installed in the rootfs" >&2
+	exit 1
+fi
+rm -rf -- "$rootfs/tmp/power-profiles-daemon" \
+	"$rootfs/tmp/power-profiles-daemon-qcom.patch" \
+	"$rootfs/tmp/build-power-profiles-daemon-package.sh" \
+	"$rootfs/tmp/POWER_PROFILES_DAEMON_PACKAGE" \
+	"$rootfs/tmp/$ppd_package_name"
+
 echo "enabling NetworkManager, Bluetooth and the Plasma display manager"
 # These operations only create/remove symlinks. Running the host systemctl in
 # offline --root mode avoids D-Bus and chroot-detection failures under qemu in
@@ -732,6 +787,7 @@ unmount_rootfs
 	printf 'package_mirror=%s\n' "$mirror"
 	printf 'kernel_release=%s\n' "$kernel_release"
 	printf 'kernel_package=%s\n' "${kernel_package##*/}"
+	printf 'power_profiles_daemon_package=%s\n' "$ppd_package_name"
 	printf 'ssc_bundle_version=%s\n' "$(head -n 1 "$ssc_bundle/VERSION")"
 	if [[ -f $ssc_bundle/SHA256SUMS ]]; then
 		printf 'ssc_manifest_sha256=%s\n' \

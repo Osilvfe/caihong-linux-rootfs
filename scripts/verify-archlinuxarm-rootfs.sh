@@ -156,7 +156,11 @@ usr/lib/firmware/qcom/sm8650/CAMERA_ICP.mbn
 usr/lib/firmware/qcom/sm8650/SM8650-MTP-tplg.bin
 usr/lib/firmware/qcom/sm8650/bps-striping-bggr10-nv12-3264x2448.bin
 usr/lib/firmware/qcom/sm8650/bps-striping-bggr10-nv12-4208x3120.bin
-usr/lib/firmware/qcom/sm8650/bps-striping-bggr10-nv12-640x480.bin'
+usr/lib/firmware/qcom/sm8650/bps-striping-bggr10-nv12-640x480.bin
+usr/lib/power-profiles-daemon
+usr/lib/systemd/system/power-profiles-daemon.service
+usr/share/dbus-1/system-services/net.hadess.PowerProfiles.service
+usr/share/polkit-1/actions/power-profiles-daemon.policy'
 
 failed=0
 
@@ -245,6 +249,11 @@ for path in $required_paths; do
 		failed=1
 	fi
 done
+
+if ! grep -aq 'qcom_cpufreq' "$target/usr/lib/power-profiles-daemon"; then
+	echo "power-profiles-daemon is missing the Qualcomm profile driver" >&2
+	failed=1
+fi
 
 pen_script="$target/usr/local/sbin/caihong-pen-charge"
 pen_service="$target/etc/systemd/system/caihong-pen-charge.service"
