@@ -1,0 +1,216 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-only
+"""Keep the Caihong battery inside a charge window by toggling bypass.
+
+The daemon reads the charge controller's raw state of charge. At the stop
+threshold it inhibits charging, and at the resume threshold it allows charging
+again. Stopping charge is not hardware battery isolation: if the adapter cannot
+supply enough power, the battery can still be topped up.
+"""
+
+import argparse
+import json
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+import threading
+
+
+BATTERY = Path("/sys/class/power_supply/qcom-battmgr-bat")
+DIAGNOSTIC = BATTERY / "device/oneplus_charge_control_status"
+CONFIG = Path("/etc/caihong-autocharge.json")
+HELPER = Path("/usr/local/sbin/caihong-charge")
+DEFAULTS = {"stop": 80, "resume": 79, "interval": 30}
+MODES = {True: ("on", "inhibit-charge"), False: ("off", "auto")}
+
+
+def read(name):
+    return (BATTERY / name).read_text().strip()
+
+
+def number(name):
+    try:
+        return int(read(name))
+    except (OSError, ValueError):
+        return None
+
+
+def behaviour():
+    value = read("charge_behaviour")
+    for item in value.split():
+        if item.startswith("[") and item.endswith("]"):
+            return item[1:-1]
+    return value.split()[0] if value.split() else ""
+
+
+def raw_soc():
+    try:
+        fields = dict(item.split("=", 1) for item in DIAGNOSTIC.read_text().split())
+    except (OSError, ValueError):
+        return None
+    try:
+        value = int(fields.get("raw_soc"))
+    except (TypeError, ValueError):
+        return None
+    return value if 0 <= value <= 100 else None
+
+
+def state_of_charge():
+    value = raw_soc()
+    if value is not None:
+        return value, "raw_soc"
+    value = number("capacity")
+    return (value, "capacity") if value is not None else (None, None)
+
+
+def validate(config):
+    if not isinstance(config, dict) or set(config) != set(DEFAULTS):
+        raise ValueError("configuration must contain exactly stop, resume and interval")
+    if type(config["stop"]) is not int or type(config["resume"]) is not int:
+        raise ValueError("stop and resume must be integers")
+    if not 1 <= config["stop"] <= 100:
+        raise ValueError("stop must be between 1 and 100")
+    if not 0 <= config["resume"] <= 99:
+        raise ValueError("resume must be between 0 and 99")
+    if config["resume"] >= config["stop"]:
+        raise ValueError("resume must be lower than stop")
+    if type(config["interval"]) not in (int, float) or not 0 < config["interval"] <= 86400:
+        raise ValueError("interval must be a number of seconds between 0 and 86400")
+    return config
+
+
+def load(path=CONFIG):
+    config = dict(DEFAULTS)
+    if path.exists():
+        data = json.loads(path.read_text())
+        if not isinstance(data, dict):
+            raise ValueError(f"{path} must contain a JSON object")
+        unknown = sorted(set(data) - set(DEFAULTS))
+        if unknown:
+            raise ValueError(f"unsupported keys in {path}: {', '.join(unknown)}")
+        config.update(data)
+    return validate(config)
+
+
+def apply(inhibit, dry_run=False):
+    mode, target = MODES[inhibit]
+    if dry_run:
+        print(f"dry-run: would run {HELPER} bypass {mode}")
+        return
+    if HELPER.is_file() and os.access(HELPER, os.X_OK):
+        try:
+            result = subprocess.run(
+                [str(HELPER), "bypass", mode], capture_output=True, text=True, timeout=20)
+        except (OSError, subprocess.SubprocessError) as error:
+            raise RuntimeError(f"caihong-charge bypass {mode} failed: {error}") from error
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout).strip()
+            raise RuntimeError(f"caihong-charge bypass {mode} failed: {detail}")
+    else:
+        (BATTERY / "charge_behaviour").write_text(target + "\n")
+
+
+def evaluate(config, dry_run=False):
+    soc, source = state_of_charge()
+    if soc is None:
+        raise RuntimeError("state of charge unavailable")
+    current = behaviour()
+    if soc >= config["stop"] and current != "inhibit-charge":
+        apply(True, dry_run)
+        return "inhibit", soc, source
+    if soc <= config["resume"] and current != "auto":
+        apply(False, dry_run)
+        return "allow", soc, source
+    return "none", soc, source
+
+
+def status(config):
+    soc, source = state_of_charge()
+    start = number("charge_control_start_threshold")
+    end = number("charge_control_end_threshold")
+    try:
+        current = behaviour()
+    except OSError:
+        current = "unavailable"
+    if soc is None:
+        print("state of charge: unavailable")
+        decision = "unavailable"
+    else:
+        print(f"state of charge: {soc}% ({source})")
+        if soc >= config["stop"]:
+            decision = "inhibit"
+        elif soc <= config["resume"]:
+            decision = "allow"
+        else:
+            decision = "none"
+    print(f"charge_behaviour: {current}")
+    print(f"decision: {decision}")
+    print(f"stop / resume: {config['stop']}% / {config['resume']}%")
+    print(f"poll interval: {config['interval']}s")
+    print(f"kernel thresholds: start={start} end={end}")
+    if end is not None and end <= config["resume"]:
+        print(f"warning: kernel end threshold {end}% is not above the resume "
+              "threshold; charging may not restart")
+    if start is not None and start < config["resume"]:
+        print(f"warning: kernel start threshold {start}% is below the resume "
+              "threshold; charging may not start until it is lower")
+
+
+def run(config, dry_run):
+    stopping = threading.Event()
+
+    def stop(signum, frame):
+        stopping.set()
+
+    for signum in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(signum, stop)
+    while not stopping.is_set():
+        try:
+            action, soc, source = evaluate(config, dry_run)
+            if action == "inhibit":
+                print(f"SoC {soc}% ({source}) >= stop {config['stop']}%; "
+                      "charging inhibited")
+            elif action == "allow":
+                print(f"SoC {soc}% ({source}) <= resume {config['resume']}%; "
+                      "charging allowed")
+        except Exception as error:
+            print(f"caihong-autocharge: {error}", file=sys.stderr)
+        stopping.wait(config["interval"])
+    return 0
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Caihong automatic charge window")
+    parser.add_argument("--config", type=Path, default=CONFIG)
+    parser.add_argument("--status", action="store_true", help="print state and exit")
+    parser.add_argument("--once", action="store_true", help="evaluate once and exit")
+    parser.add_argument("--dry-run", action="store_true", help="log actions without applying")
+    arguments = parser.parse_args()
+    try:
+        config = load(arguments.config)
+    except (OSError, ValueError) as error:
+        print(f"caihong-autocharge: {error}", file=sys.stderr)
+        return 2
+    if arguments.status:
+        status(config)
+        return 0
+    if os.geteuid() != 0 and not arguments.dry_run:
+        print("caihong-autocharge: modifying charge state requires root", file=sys.stderr)
+        return 1
+    if arguments.once:
+        try:
+            evaluate(config, arguments.dry_run)
+        except (OSError, ValueError, RuntimeError) as error:
+            print(f"caihong-autocharge: {error}", file=sys.stderr)
+            return 1
+        return 0
+    return run(config, arguments.dry_run)
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        sys.exit(130)

@@ -247,6 +247,7 @@ Commands that change hardware or boot state require root privileges.
 | `caihong-npu-info` | `sudo caihong-npu-info` reports CDSP firmware state and FastRPC capabilities. `--self-test` verifies generic v75 DSP execution; `--htp-self-test` verifies a float QAIRT/QNN graph; `--htp-conv-self-test` verifies quantized Conv2d against a CPU reference. |
 | `caihong-bluetooth-autostart` | Powers on the configured Bluetooth controller during boot. |
 | `caihong-charge` | Reads battery status and firmware health values with `status` / `health`; `sudo caihong-charge limit 75 80` sets charging thresholds, and `sudo caihong-charge bypass on` / `off` controls charging inhibition without disconnecting the adapter. This does not guarantee battery isolation. |
+| `caihong-autocharge` | Optional daemon that keeps the battery inside a charge window by toggling bypass. Enable it with `sudo systemctl enable --now caihong-autocharge` and configure `stop`, `resume` and `interval` in `/etc/caihong-autocharge.json`; `--status` prints the current decision. It is not enabled by default and does not change the saved `caihong-charge` thresholds. |
 | `caihong-pen-pair` | Pairs a pen address obtained from a validated CPS8601 magnetic-attach event. Normally run by its systemd timer. |
 | `caihong-pen-charge` | Performs a bounded CPS8601 charging/attach observation. Normally run by its systemd timer. |
 | `caihong-pen-autoconnect` | Restores the paired pen connection and touchscreen pen scan mode. Normally run by its systemd timer. |
@@ -265,6 +266,16 @@ Charging defaults to automatic operation with no extra charge limit. Settings
 persist only when explicitly saved with `--save` and restored by enabling
 `caihong-charge.service`; the service is not enabled by default. Firmware health
 and capacity values are not independent measurements of battery wear.
+
+`caihong-autocharge` is an opt-in alternative to the kernel thresholds: it
+inhibits charging once the controller's raw state of charge reaches `stop` and
+allows it again at `resume`. It reads `/etc/caihong-autocharge.json` (defaults:
+`stop` 80, `resume` 79, `interval` 30 seconds) and calls
+`caihong-charge bypass` only when the state changes. The daemon is not enabled
+by default, so installs keep stock charging behaviour until
+`sudo systemctl enable --now caihong-autocharge` is run. Disable it with
+`sudo systemctl disable --now caihong-autocharge`; stopping charge still does
+not guarantee battery isolation.
 
 ## Kernel updates
 
