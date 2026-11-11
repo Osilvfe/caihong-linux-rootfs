@@ -161,8 +161,7 @@ packages=(
 	lsof
 	tcpdump
 	plasma-meta
-	sddm
-	sddm-kcm
+	plasma-login-manager
 	konsole
 	dolphin
 	mesa
@@ -588,7 +587,7 @@ systemctl --root="$rootfs" disable hostapd.service dnsmasq.service \
 	2>/dev/null || true
 systemctl --root="$rootfs" enable \
 	NetworkManager.service bluetooth.service power-profiles-daemon.service \
-	sshd.service sddm.service
+	sshd.service plasmalogin.service
 systemctl --root="$rootfs" set-default graphical.target
 systemctl --root="$rootfs" enable caihong-grow-rootfs.service
 systemctl --root="$rootfs" enable caihong-fix-kwin-brightness.service

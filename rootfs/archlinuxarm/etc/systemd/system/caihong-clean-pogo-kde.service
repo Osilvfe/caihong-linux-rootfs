@@ -1,6 +1,6 @@
 [Unit]
 Description=Remove unsupported Caihong Pogo keyboard backlight actions
-After=sddm.service
+After=display-manager.service
 Before=graphical.target
 ConditionPathExists=/home/alarm/.config/kglobalshortcutsrc
 

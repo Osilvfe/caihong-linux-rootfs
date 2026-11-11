@@ -1,7 +1,7 @@
 [Unit]
 Description=Seed the stock-derived KWin automatic brightness curve
 After=local-fs.target
-Before=sddm.service
+Before=display-manager.service
 
 [Service]
 Type=oneshot
