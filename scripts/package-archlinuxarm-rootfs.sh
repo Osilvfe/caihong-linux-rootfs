@@ -552,21 +552,23 @@ if [[ ! -f $ppd_package ]]; then
 	echo "power-profiles-daemon package was not created: $ppd_package_name" >&2
 	exit 1
 fi
+# pacman -Q also matches packages that provide the requested name, so filter
+# the installed package list to catch the real stock package only.
 # An input archive from an older build can still carry the stock package.
-if "$chroot_tool" "$rootfs" "${chroot_env[@]}" \
-	pacman -Qq power-profiles-daemon >/dev/null 2>&1; then
+if "$chroot_tool" "$rootfs" "${chroot_env[@]}" pacman -Qq |
+	grep -qx power-profiles-daemon; then
 	"$chroot_tool" "$rootfs" "${chroot_env[@]}" \
 		pacman -Rdd --noconfirm power-profiles-daemon
 fi
 "$chroot_tool" "$rootfs" "${chroot_env[@]}" \
 	pacman -U --noconfirm "/tmp/$ppd_package_name"
-if ! "$chroot_tool" "$rootfs" "${chroot_env[@]}" \
-	pacman -Qq power-profiles-daemon-caihong >/dev/null; then
+if ! "$chroot_tool" "$rootfs" "${chroot_env[@]}" pacman -Qq |
+	grep -qx power-profiles-daemon-caihong; then
 	echo "power-profiles-daemon-caihong was not registered in the package database" >&2
 	exit 1
 fi
-if "$chroot_tool" "$rootfs" "${chroot_env[@]}" \
-	pacman -Qq power-profiles-daemon >/dev/null 2>&1; then
+if "$chroot_tool" "$rootfs" "${chroot_env[@]}" pacman -Qq |
+	grep -qx power-profiles-daemon; then
 	echo "stock power-profiles-daemon is still installed in the rootfs" >&2
 	exit 1
 fi
