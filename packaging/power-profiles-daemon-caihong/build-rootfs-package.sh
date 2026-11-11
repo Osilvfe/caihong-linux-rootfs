@@ -34,7 +34,7 @@ for path in "$source_dir/meson.build" "$source_dir/src/ppd-driver-cpufreq.c" "$p
 	}
 done
 
-for tool in bsdtar meson ninja patch rsync zstd; do
+for tool in bsdtar glib-mkenums meson ninja patch rsync zstd; do
 	command -v "$tool" >/dev/null 2>&1 || {
 		echo "missing power-profiles-daemon build tool: $tool" >&2
 		exit 1

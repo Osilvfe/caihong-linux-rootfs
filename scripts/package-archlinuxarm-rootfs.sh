@@ -138,6 +138,7 @@ packages=(
 	sudo
 	cmake
 	extra-cmake-modules
+	glib2-devel
 	meson
 	ninja
 	qt6-tools
