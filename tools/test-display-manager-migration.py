@@ -67,17 +67,27 @@ unit=
 for argument in "$@"; do
 	case $argument in
 		--root=*) root=${argument#--root=} ;;
-		enable|disable) action=$argument ;;
+		enable|disable|is-enabled) action=$argument ;;
 		*) unit=$argument ;;
 	esac
 done
-[ "$action" = enable ] || exit 2
 [ -n "$root" ] || exit 2
-[ "$unit" = plasmalogin.service ] || exit 2
-mkdir -p "$root/etc/systemd/system"
-ln -sfn /usr/lib/systemd/system/plasmalogin.service \
-	"$root/etc/systemd/system/display-manager.service"
-printf 'systemctl --root=%s enable %s\n' "$root" "$unit" >> "$COMMAND_LOG"
+	case $action in
+	is-enabled)
+		[ -L "$root/etc/systemd/system/graphical.target.wants/$unit" ] ||
+			[ -e "$root/etc/systemd/system/graphical.target.wants/$unit" ] ||
+			[ -L "$root/etc/systemd/system/multi-user.target.wants/$unit" ] ||
+			[ -e "$root/etc/systemd/system/multi-user.target.wants/$unit" ]
+		;;
+	enable)
+		[ "$unit" = plasmalogin.service ] || exit 2
+		mkdir -p "$root/etc/systemd/system"
+		ln -sfn /usr/lib/systemd/system/plasmalogin.service \
+			"$root/etc/systemd/system/display-manager.service"
+		printf 'systemctl --root=%s enable %s\n' "$root" "$unit" >> "$COMMAND_LOG"
+		;;
+	*) exit 2 ;;
+esac
 '''
 
 
@@ -112,6 +122,7 @@ class DisplayManagerMigrationTests(unittest.TestCase):
             FAKE_ROOT=str(self.root),
             FAKE_PLM_INSTALLED=str(self.work / 'plm-installed'),
             FAKE_SDDM_INSTALLED=str(self.work / 'sddm-installed'),
+            CAIHONG_PLATFORM_UPDATE_INSTALL='1',
         )
 
     def run_script(self):
@@ -164,6 +175,38 @@ class DisplayManagerMigrationTests(unittest.TestCase):
         result = self.run_script()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(alias.readlink(), Path('/usr/lib/systemd/system/ly.service'))
+        self.assertTrue((self.work / 'sddm-installed').exists())
+        self.assertFalse(self.log.exists())
+
+    def test_directly_enabled_non_sddm_manager_is_preserved(self):
+        pacman = self.root / 'usr/bin/pacman'
+        pacman.parent.mkdir(parents=True)
+        pacman.write_text('#!/bin/sh\nexec fake-pacman "$@"\n')
+        pacman.chmod(0o755)
+        (self.work / 'sddm-installed').touch()
+        alias = self.root / 'etc/systemd/system/display-manager.service'
+        alias.parent.mkdir(parents=True)
+        alias.symlink_to('/usr/lib/systemd/system/sddm.service')
+        wants = self.root / 'etc/systemd/system/graphical.target.wants'
+        wants.mkdir(parents=True)
+        (wants / 'ly.service').symlink_to('/usr/lib/systemd/system/ly.service')
+
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(alias.readlink(), Path('/usr/lib/systemd/system/sddm.service'))
+        self.assertTrue((self.work / 'sddm-installed').exists())
+        self.assertFalse(self.log.exists())
+
+    def test_migration_is_skipped_outside_update_package_installation(self):
+        pacman = self.root / 'usr/bin/pacman'
+        pacman.parent.mkdir(parents=True)
+        pacman.write_text('#!/bin/sh\nexec fake-pacman "$@"\n')
+        pacman.chmod(0o755)
+        (self.work / 'sddm-installed').touch()
+        self.environment['CAIHONG_PLATFORM_UPDATE_INSTALL'] = '0'
+
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertTrue((self.work / 'sddm-installed').exists())
         self.assertFalse(self.log.exists())
 

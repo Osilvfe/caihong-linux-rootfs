@@ -22,6 +22,12 @@ if [ "${CAIHONG_PLATFORM_SKIP_DISPLAY_MANAGER:-0}" = 1 ]; then
 	exit 0
 fi
 
+# Only the incremental update installer is allowed to replace SDDM.  Image
+# builders install and enable PLM themselves and must not run this migration.
+if [ "${CAIHONG_PLATFORM_UPDATE_INSTALL:-0}" != 1 ]; then
+	exit 0
+fi
+
 if [ ! -x "$root/usr/bin/pacman" ]; then
 	# The platform package is also used for non-Arch distributions.  Leave
 	# their display manager alone.
@@ -48,10 +54,23 @@ run_systemctl()
 
 alias=$root/etc/systemd/system/display-manager.service
 
-# Never override a display manager that the administrator selected.  Only the
-# stock SDDM selection, an empty selection, or an existing PLM selection is
-# migrated automatically.  This runs on update-package installation only; the
-# image builder installs and enables PLM directly.
+# A display manager can be enabled without updating display-manager.service,
+# for example `systemctl enable ly.service`.  Treat any explicitly enabled
+# third-party manager as an administrator choice even if the alias still points
+# at stock SDDM.
+for unit in \
+	gdm.service gdm3.service lightdm.service ly.service greetd.service \
+	lemurs.service lxdm.service nodm.service slim.service wdm.service \
+	xdm.service cosmic-greeter.service; do
+	if run_systemctl is-enabled --quiet "$unit" >/dev/null 2>&1; then
+		echo "keeping administrator-enabled display manager: $unit" >&2
+		exit 0
+	fi
+done
+
+# Never override a display manager that the administrator selected through the
+# display-manager.service alias.  Only the stock SDDM selection, an empty
+# selection, or an existing PLM selection is migrated automatically.
 if [ -L "$alias" ]; then
 	target=$(readlink -- "$alias")
 	case $target in
