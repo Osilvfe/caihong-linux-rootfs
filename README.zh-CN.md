@@ -338,11 +338,15 @@ sudo /usr/libexec/caihong-platform/install-caihong-platform \
   ./caihong-npu-<version>-lib.tar.zst
 ```
 
-安装器会校验 manifest，先暂存每个文件，并把被覆盖文件备份到
-`/var/lib/caihong-packages/<component>/previous`。`/etc` 中的文件会保留为
-`<file>.caihong-new`，等待明确确认后再合并。Armada 使用
+安装器会校验 manifest，并把被覆盖文件备份到
+`/var/lib/caihong-packages/<component>/previous`。systemd 候选配置暂存在
+`/var/lib/caihong-config-pending/<component>/etc/systemd`，其他 `/etc` 配置以
+`<file>.caihong-new` 保存，供手动审阅。旧版本遗留的候选文件需手动整理。Armada 使用
 `caihong-platform-armada-<version>.tar.zst`。如需恢复上一版文件，运行
 `install-caihong-platform --rollback <component>`。
+
+Arch Linux ARM 安装平台更新包时还会安装、启用 Plasma Login Manager 并移除
+SDDM；管理员已选择其他显示管理器时保留原选择。全新镜像在打包时启用 PLM。
 
 同一个更新交付物包含内核 RPM。Armada 基于 Fedora：用事务安装器安装
 `caihong-platform-armada-<version>.tar.zst`，再用 DNF 安装
@@ -357,6 +361,8 @@ e2fsprogs 和 Android sparse 镜像工具（`img2simg`）；其他架构还需�
 ```sh
 scripts/checkout-dependencies.sh
 scripts/build-kernel-release.sh
+sudo -E scripts/build-caihong-platform-package.sh release
+scripts/build-caihong-npu-package.sh release
 sudo -E env CHROOT_TOOL=chroot MODULE_TREE="$PWD/modules-current" \
   OUTPUT_FORMAT=ext4 SPARSE_IMAGE=1 \
   scripts/package-archlinuxarm-rootfs.sh \
