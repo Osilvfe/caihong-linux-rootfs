@@ -254,6 +254,11 @@ if ! grep -aq 'qcom_cpufreq' "$target/usr/lib/power-profiles-daemon"; then
 	echo "power-profiles-daemon is missing the Qualcomm profile driver" >&2
 	failed=1
 fi
+if [ "$(readlink "$target/etc/systemd/system/display-manager.service" 2>/dev/null)" != \
+	/usr/lib/systemd/system/plasmalogin.service ]; then
+	echo "display-manager.service does not point to Plasma Login Manager" >&2
+	failed=1
+fi
 if [ ! -x "$target/usr/bin/glib-mkenums" ]; then
 	echo "power-profiles-daemon build tools are missing: /usr/bin/glib-mkenums" >&2
 	failed=1

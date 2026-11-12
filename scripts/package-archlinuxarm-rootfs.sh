@@ -588,6 +588,13 @@ systemctl --root="$rootfs" disable \
 	2>/dev/null || true
 systemctl --root="$rootfs" disable hostapd.service dnsmasq.service \
 	2>/dev/null || true
+# SDDM and Plasma Login Manager both enable themselves through the
+# display-manager.service alias.  Refuse to leave SDDM selected when an input
+# archive or a previous rootfs build already created that alias.
+"$chroot_tool" "$rootfs" "${chroot_env[@]}" \
+	systemctl disable --no-reload sddm.service plasmalogin.service \
+	2>/dev/null || true
+rm -f -- "$rootfs/etc/systemd/system/display-manager.service"
 systemctl --root="$rootfs" enable \
 	NetworkManager.service bluetooth.service power-profiles-daemon.service \
 	sshd.service plasmalogin.service
