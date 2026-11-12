@@ -16,10 +16,7 @@ pacman_server=${PACMAN_SERVER:-$mirror/\$arch/\$repo}
 root_spec=${ROOT_SPEC:-PARTLABEL=linux}
 root_fstype=${ROOT_FSTYPE:-ext4}
 module_tree=${MODULE_TREE:-"$project_dir/modules-current"}
-firmware_tree=${FIRMWARE_TREE:-"$project_dir/firmware"}
 install_kernel_modules=${INSTALL_KERNEL_MODULES:-1}
-ssc_bundle=${SSC_BUNDLE:-"$project_dir/firmware-assets/caihong-ssc"}
-install_ssc=${INSTALL_SSC:-1}
 
 if [ -z "$target" ]; then
 	echo "usage: sudo $0 /mounted/archroot [rootfs.tar.gz]" >&2
@@ -40,10 +37,6 @@ done
 
 if [ "$install_kernel_modules" != 0 ] && [ "$install_kernel_modules" != 1 ]; then
 	echo "INSTALL_KERNEL_MODULES must be 0 or 1" >&2
-	exit 1
-fi
-if [ "$install_ssc" != 0 ] && [ "$install_ssc" != 1 ]; then
-	echo "INSTALL_SSC must be 0 or 1" >&2
 	exit 1
 fi
 if [ "$install_kernel_modules" = 1 ]; then
@@ -146,35 +139,6 @@ if ! grep -q '^DisableSandboxFilesystem$' "$target/etc/pacman.conf"; then
 	fi
 fi
 
-echo "installing Caihong firmware"
-mkdir -p "$target/lib/firmware"
-if [ ! -d "$firmware_tree" ]; then
-	echo "Caihong firmware tree not found: $firmware_tree" >&2
-	exit 1
-fi
-(cd "$firmware_tree" && sha256sum -c SHA256SUMS)
-rsync -a --exclude=SOURCE.md --exclude=SHA256SUMS \
-	"$firmware_tree/." "$target/lib/firmware/"
-"$project_dir/scripts/build-caihong-audioreach-topology.sh" \
-	"$target/lib/firmware/qcom/sm8650/SM8650-MTP-tplg.bin"
-
-echo "installing Caihong rootfs overlay"
-cp -a "$project_dir/rootfs/archlinuxarm/." "$target/"
-rm -f -- "$target/etc/alsa/state-daemon.conf"
-"$project_dir/scripts/install-caihong-adbd.sh" "$target"
-
-if [ "$install_ssc" = 1 ]; then
-	if [ ! -d "$ssc_bundle" ]; then
-		echo "Caihong SSC bundle not found: $ssc_bundle" >&2
-		echo "provide a verified bundle through SSC_BUNDLE" >&2
-		echo "or set INSTALL_SSC=0 only for a deliberately sensor-free image" >&2
-		exit 1
-	fi
-	echo "installing Caihong SSC userspace and registry seed"
-	"$project_dir/scripts/ssc/install-rootfs.sh" \
-		"$ssc_bundle" "$target"
-fi
-
 if [ "$install_kernel_modules" = 1 ]; then
 	echo "installing matching Caihong kernel modules"
 	"$project_dir/scripts/install-caihong-modules.sh" "$module_tree" "$target"
@@ -194,11 +158,6 @@ rm -f -- \
 printf '%s\n' caihong > "$target/etc/hostname"
 printf '%s / %s rw,noatime 0 1\n' "$root_spec" "$root_fstype" > "$target/etc/fstab"
 : > "$target/etc/machine-id"
-
-# libcamera allocates application-visible frame buffers from DMA-BUF heaps.
-install -D -m 0644 \
-	"$project_dir/rootfs/archlinuxarm/etc/udev/rules.d/99-caihong-dma-heap.rules" \
-	"$target/etc/udev/rules.d/99-caihong-dma-heap.rules"
 
 if [ "${INCLUDE_BOOT_ARTIFACTS:-0}" = 1 ]; then
 	install -D -m 0644 "$project_dir/linux/out/arch/arm64/boot/Image" \

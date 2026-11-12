@@ -10,6 +10,7 @@ version=${CAIHONG_PLATFORM_VERSION:-$(git -C "$project_dir" rev-parse --short HE
 libdir=${LIBDIR:-lib}
 kernel_release=${KERNEL_RELEASE:-}
 distribution=${DISTRIBUTION:-archlinuxarm}
+build_root=${CAIHONG_BUILD_ROOT:-"$project_dir/build/platform-build-root-$distribution"}
 
 for tool in bsdtar file git install sha256sum zstd; do
 	if ! command -v "$tool" >/dev/null 2>&1; then
@@ -55,6 +56,8 @@ find "$stage" -xdev -type f -exec chmod go-w {} +
 
 cleanup()
 {
+	"$project_dir/scripts/caihong-build-root.sh" cleanup "$build_root" \
+		>/dev/null 2>&1 || true
 	rm -rf "$work_dir"
 	rm -f "$temporary"
 }
@@ -80,11 +83,31 @@ if [ "$distribution" = armada ]; then
 	done
 	sed -i 's#/usr/bin/resize2fs#/usr/sbin/resize2fs#g' \
 		"$stage/etc/systemd/system/caihong-grow-rootfs.service"
+	# Armada has its own account layout and does not use the Arch alarm user.
+	rm -f -- "$stage/etc/sudoers.d/10-alarm" \
+		"$stage/etc/alsa/state-daemon.conf"
 fi
 
-if [ "$distribution" = archlinuxarm ]; then
-	"$project_dir/scripts/install-caihong-toolbox-rootfs.sh" "$stage" >/dev/null
+if [ "$distribution" = archlinuxarm ] || [ "$distribution" = armada ]; then
+	"$project_dir/scripts/caihong-build-root.sh" prepare \
+		"$build_root" "$distribution" >/dev/null
+	if [ "$distribution" = archlinuxarm ]; then
+		CAIHONG_BUILD_ROOT="$build_root" \
+		"$project_dir/scripts/install-caihong-toolbox-rootfs.sh" "$stage" >/dev/null
+	fi
+	CAIHONG_BUILD_ROOT="$build_root" LIBDIR="$libdir" \
 	"$project_dir/scripts/install-caihong-vaapi-stage.sh" "$stage" >/dev/null
+	CAIHONG_BUILD_ROOT="$build_root" LIBCAMERA_LIBDIR="$libdir" \
+	"$project_dir/scripts/install-caihong-libcamera-stage.sh" "$stage" >/dev/null
+	CAIHONG_BUILD_ROOT="$build_root" \
+	"$project_dir/scripts/install-caihong-plasma-camera-stage.sh" "$stage" >/dev/null
+	CAIHONG_BUILD_ROOT="$build_root" \
+	"$project_dir/scripts/install-caihong-qbootctl-stage.sh" "$stage" >/dev/null
+	CAIHONG_BUILD_ROOT="$build_root" \
+	"$project_dir/scripts/install-caihong-utilities-stage.sh" "$stage" >/dev/null
+	CAIHONG_BUILD_ROOT="$build_root" \
+	"$project_dir/scripts/install-caihong-ppd-stage.sh" "$stage" >/dev/null
+	"$project_dir/scripts/caihong-build-root.sh" cleanup "$build_root"
 fi
 
 (

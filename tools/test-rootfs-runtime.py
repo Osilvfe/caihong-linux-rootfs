@@ -89,6 +89,15 @@ class PlatformInstallerTests(unittest.TestCase):
         candidate = self.root / (self.configuration + '.caihong-new')
         self.assertEqual(candidate.read_text(), 'candidate configuration\n')
 
+    def test_image_build_applies_configuration_directly(self):
+        self.environment['CAIHONG_PLATFORM_IMAGE_BUILD'] = '1'
+        self.install()
+        self.assertEqual((self.root / self.unit).read_text(), 'candidate unit\n')
+        self.assertEqual((self.root / self.configuration).read_text(),
+                         'candidate configuration\n')
+        self.assertFalse((self.root / (self.configuration + '.caihong-new')).exists())
+        self.assertFalse(self.pending.exists())
+
     def test_existing_service_enablement_is_preserved(self):
         existing = self.root / self.link
         existing.parent.mkdir(parents=True)

@@ -45,7 +45,7 @@ jobs:
             ccache curl dwarves e2fsprogs flex git kmod libarchive-tools \
             libegl-dev libelf-dev libgbm-dev libgles-dev libdrm-dev \
             libssl-dev libva-dev meson ninja-build pkg-config python3 rpm \
-            rsync shellcheck zstd
+            rsync shellcheck skopeo umoci zstd
 
       - name: Restore package downloads
         uses: actions/cache@v4
@@ -83,8 +83,12 @@ jobs:
             KERNEL_CC="ccache gcc" KERNEL_HOSTCC="ccache gcc" \
           scripts/build-kernel-release.sh
           scripts/build-linux-caihong-rpm.sh modules-current release
-          DISTRIBUTION=archlinuxarm scripts/build-caihong-platform-package.sh release
-          DISTRIBUTION=armada scripts/build-caihong-platform-package.sh release
+          sudo -E env PATH="$PATH" \
+            DISTRIBUTION=archlinuxarm scripts/build-caihong-platform-package.sh release
+          sudo -E env PATH="$PATH" \
+            DISTRIBUTION=armada LIBDIR=lib64 \
+            scripts/build-caihong-platform-package.sh release
+          sudo chown -R "$USER:$USER" release
           scripts/build-caihong-npu-package.sh release
           LIBDIR=lib64 scripts/build-caihong-npu-package.sh release
           scripts/verify-caihong-update-packages.sh release
@@ -201,6 +205,7 @@ jobs:
             scripts/package-archlinuxarm-rootfs.sh \
             "release/caihong-rootfs-$kernel_release.ext4.sparse.img"
           sudo chown -R "$USER:$USER" release build/pacman-cache downloads
+
 
       - name: Build Armada rootfs
         if: matrix.distribution == 'armada'

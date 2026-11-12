@@ -5,6 +5,12 @@ CDPATH=
 
 target_root=${CAIHONG_PLATFORM_ROOT:-/}
 package=${1:-}
+image_build=${CAIHONG_PLATFORM_IMAGE_BUILD:-0}
+
+case $image_build in
+	0|1) ;;
+	*) echo "CAIHONG_PLATFORM_IMAGE_BUILD must be 0 or 1" >&2; exit 2 ;;
+esac
 
 if [ "$package" = --rollback ]; then
 	component=${2:-}
@@ -168,9 +174,19 @@ while IFS= read -r entry; do
 	case $path in
 		usr/share/caihong-package/*) continue ;;
 		etc/systemd/*)
-			destination=$target_root/var/lib/caihong-config-pending/$component/$path
+			if [ "$image_build" = 1 ]; then
+				destination=$target_root/$path
+			else
+				destination=$target_root/var/lib/caihong-config-pending/$component/$path
+			fi
 			;;
-		etc/*) destination=$target_root/$path.caihong-new ;;
+		etc/*)
+			if [ "$image_build" = 1 ]; then
+				destination=$target_root/$path
+			else
+				destination=$target_root/$path.caihong-new
+			fi
+			;;
 		*) destination=$target_root/$path ;;
 	esac
 	relative=${destination#"$target_root"/}
@@ -213,5 +229,7 @@ fi
 cleanup
 
 echo "installed Caihong component $component $version"
-echo "Systemd configuration candidates require manual review under /var/lib/caihong-config-pending/$component/etc/systemd."
-echo "New configuration files ending in .caihong-new require manual review."
+if [ "$image_build" = 0 ]; then
+	echo "Systemd configuration candidates require manual review under /var/lib/caihong-config-pending/$component/etc/systemd."
+	echo "New configuration files ending in .caihong-new require manual review."
+fi

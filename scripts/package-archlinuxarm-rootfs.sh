@@ -94,14 +94,16 @@ if [[ -n $npu_package ]]; then
 		exit 1
 	}
 fi
-if [[ -n $platform_package ]]; then
-	platform_distribution=$(bsdtar -xOf "$platform_package" \
-		usr/share/caihong-platform/distribution)
-	[[ $platform_distribution == archlinuxarm ]] || {
-		echo "platform package targets $platform_distribution, expected archlinuxarm" >&2
-		exit 1
-	}
-fi
+[[ -n $platform_package ]] || {
+	echo "a Caihong platform package is required to build the device rootfs" >&2
+	exit 1
+}
+platform_distribution=$(bsdtar -xOf "$platform_package" \
+	usr/share/caihong-platform/distribution)
+[[ $platform_distribution == archlinuxarm ]] || {
+	echo "platform package targets $platform_distribution, expected archlinuxarm" >&2
+	exit 1
+}
 if [[ -n $npu_package ]]; then
 	npu_libdir=$(bsdtar -xOf "$npu_package" usr/share/caihong-npu/libdir)
 	[[ $npu_libdir == lib ]] || {
@@ -138,7 +140,6 @@ packages=(
 	sudo
 	cmake
 	extra-cmake-modules
-	glib2-devel
 	meson
 	ninja
 	qt6-tools
@@ -413,21 +414,14 @@ ALLOW_DIRECTORY=1 \
 	ROOT_SPEC=PARTLABEL=linux \
 	ROOT_FSTYPE=ext4 \
 	MODULE_TREE="$module_tree" \
-	SSC_BUNDLE="$ssc_bundle" \
 	INSTALL_KERNEL_MODULES=0 \
 	INCLUDE_WIFI=1 \
 	"$project_dir/scripts/build-archlinuxarm-rootfs.sh" \
 	"$rootfs" "$source_archive"
 
-# Board-specific policy and first-boot services live outside the generic
-# Arch Linux ARM archive so rebuilt images remain reproducible.
-rsync -aHAX --numeric-ids --chown=0:0 \
-	"$project_dir/rootfs/archlinuxarm/" "$rootfs/"
-if [[ $(stat -c '%u:%g' "$rootfs") != 0:0 || \
-	$(stat -c '%u:%g' "$rootfs/etc") != 0:0 ]]; then
-	echo "board overlay changed rootfs directory ownership" >&2
-	exit 1
-fi
+# Device-specific content is delivered by the Caihong platform package.  Do
+# not copy rootfs/archlinuxarm here: otherwise the image and the incremental
+# update would have separate producers and could silently diverge.
 
 # Keep the rootfs's resolver configuration for the final archive, but use the
 # host resolver while pacman runs in the host network namespace.
@@ -514,101 +508,21 @@ save_package_cache
 "$chroot_tool" "$rootfs" "${chroot_env[@]}" \
 	pacman -Scc --disable-sandbox --noconfirm
 
-# Pacman owns the generic SM8650 UCM path above. Reapply the board overlay so
-# the packaged rootfs retains the Caihong routing and all other board policy.
-echo "reapplying the Caihong rootfs overlay after package installation"
-rsync -aHAX --numeric-ids --chown=0:0 \
-	"$project_dir/rootfs/archlinuxarm/" "$rootfs/"
-rm -f -- "$rootfs/etc/alsa/state-daemon.conf"
+# The platform payload replaces the distribution libcamera implementation.
+# Remove the packages that own those paths before installing it, while keeping
+# the GStreamer plugin and Plasma Camera package records for their runtime
+# dependencies.
+for package in libcamera libcamera-ipa libcamera-tools; do
+	if "$chroot_tool" "$rootfs" "${chroot_env[@]}" \
+		pacman -Qq "$package" >/dev/null 2>&1; then
+		"$chroot_tool" "$rootfs" "${chroot_env[@]}" \
+			pacman -Rdd --noconfirm "$package"
+	fi
+done
 
-# PowerDevil only recommends power-profiles-daemon, so the stock package is not
-# pulled in by the package list above.  Build the patched daemon inside the
-# native AArch64 rootfs instead: it needs the same GLib/GUdev/Polkit/UPower
-# headers as the host build, and this keeps the package registered with pacman.
-echo "building and installing the Caihong power-profiles-daemon package"
-ppd_source=$project_dir/external/power-profiles-daemon
-ppd_patch=$project_dir/packaging/power-profiles-daemon-caihong/0001-qcom-cpufreq.patch
-ppd_builder=$project_dir/packaging/power-profiles-daemon-caihong/build-rootfs-package.sh
-if [[ ! -f $ppd_source/meson.build ]]; then
-	echo "missing power-profiles-daemon source; run scripts/checkout-dependencies.sh" >&2
-	exit 1
-fi
-rm -rf -- "$rootfs/tmp/power-profiles-daemon"
-rsync -a --exclude=.git --exclude=build \
-	"$ppd_source/" "$rootfs/tmp/power-profiles-daemon/"
-install -m 0644 "$ppd_patch" "$rootfs/tmp/power-profiles-daemon-qcom.patch"
-install -m 0755 "$ppd_builder" "$rootfs/tmp/build-power-profiles-daemon-package.sh"
-"$chroot_tool" "$rootfs" "${chroot_env[@]}" \
-	/tmp/build-power-profiles-daemon-package.sh \
-	/tmp/power-profiles-daemon /tmp/power-profiles-daemon-qcom.patch /tmp
-ppd_pointer=$rootfs/tmp/POWER_PROFILES_DAEMON_PACKAGE
-if [[ ! -f $ppd_pointer ]]; then
-	echo "power-profiles-daemon package pointer was not created" >&2
-	exit 1
-fi
-ppd_package_name=$(<"$ppd_pointer")
-ppd_package=$rootfs/tmp/$ppd_package_name
-if [[ ! -f $ppd_package ]]; then
-	echo "power-profiles-daemon package was not created: $ppd_package_name" >&2
-	exit 1
-fi
-# pacman -Q also matches packages that provide the requested name, so filter
-# the installed package list to catch the real stock package only.
-# An input archive from an older build can still carry the stock package.
-if "$chroot_tool" "$rootfs" "${chroot_env[@]}" pacman -Qq |
-	grep -qx power-profiles-daemon; then
-	"$chroot_tool" "$rootfs" "${chroot_env[@]}" \
-		pacman -Rdd --noconfirm power-profiles-daemon
-fi
-"$chroot_tool" "$rootfs" "${chroot_env[@]}" \
-	pacman -U --noconfirm "/tmp/$ppd_package_name"
-if ! "$chroot_tool" "$rootfs" "${chroot_env[@]}" pacman -Qq |
-	grep -qx power-profiles-daemon-caihong; then
-	echo "power-profiles-daemon-caihong was not registered in the package database" >&2
-	exit 1
-fi
-if "$chroot_tool" "$rootfs" "${chroot_env[@]}" pacman -Qq |
-	grep -qx power-profiles-daemon; then
-	echo "stock power-profiles-daemon is still installed in the rootfs" >&2
-	exit 1
-fi
-rm -rf -- "$rootfs/tmp/power-profiles-daemon" \
-	"$rootfs/tmp/power-profiles-daemon-qcom.patch" \
-	"$rootfs/tmp/build-power-profiles-daemon-package.sh" \
-	"$rootfs/tmp/POWER_PROFILES_DAEMON_PACKAGE" \
-	"$rootfs/tmp/$ppd_package_name"
-
-echo "enabling NetworkManager, Bluetooth and the Plasma display manager"
-# These operations only create/remove symlinks. Running the host systemctl in
-# offline --root mode avoids D-Bus and chroot-detection failures under qemu in
-# an unprivileged user namespace.
-systemctl --root="$rootfs" disable dhcpcd.service 2>/dev/null || true
-systemctl --root="$rootfs" disable \
-	systemd-networkd.service systemd-networkd-wait-online.service \
-	2>/dev/null || true
-systemctl --root="$rootfs" disable hostapd.service dnsmasq.service \
-	2>/dev/null || true
-# SDDM and Plasma Login Manager both enable themselves through the
-# display-manager.service alias.  Refuse to leave SDDM selected when an input
-# archive or a previous rootfs build already created that alias.
-"$chroot_tool" "$rootfs" "${chroot_env[@]}" \
-	systemctl disable --no-reload sddm.service plasmalogin.service \
-	2>/dev/null || true
-rm -f -- "$rootfs/etc/systemd/system/display-manager.service"
-systemctl --root="$rootfs" enable \
-	NetworkManager.service bluetooth.service power-profiles-daemon.service \
-	sshd.service plasmalogin.service
-systemctl --root="$rootfs" set-default graphical.target
-systemctl --root="$rootfs" enable caihong-grow-rootfs.service
-systemctl --root="$rootfs" enable caihong-fix-kwin-brightness.service
-systemctl --root="$rootfs" enable caihong-clean-pogo-kde.service
-systemctl --root="$rootfs" enable caihong-keyboard.service
-systemctl --root="$rootfs" enable caihong-bluetooth-autostart.service
-systemctl --root="$rootfs" enable caihong-adbd.service
-"$chroot_tool" "$rootfs" "${chroot_env[@]}" \
-	usermod -aG audio,input,video,wheel alarm
-chmod 0440 "$rootfs/etc/sudoers.d/10-alarm"
-"$chroot_tool" "$rootfs" "${chroot_env[@]}" visudo -cf /etc/sudoers
+# The Caihong platform package carries the board policy, audio routing and
+# device services.  It is installed below through the same package used for
+# incremental updates; do not reintroduce a direct overlay here.
 
 # The Pogo keyboard has no backlight.  Remove the generic PowerDevil action so
 # Plasma cannot present a non-functional keyboard-brightness control even if
@@ -633,9 +547,9 @@ for package in "${unwanted_boot_packages[@]}"; do
 	fi
 done
 
-# These distribution packages own the same paths as the Caihong build below.
-# Keep system upgrades from silently replacing the GPU coherency fixes and
-# board-specific IPA tuning before an updated Caihong build is available.
+# These distribution packages own the same paths as the Caihong build.  Keep
+# system upgrades from silently replacing the custom camera stack before an
+# updated platform package is available.
 libcamera_ignore='IgnorePkg = libcamera libcamera-ipa libcamera-tools gst-plugin-libcamera plasma-camera'
 pacman_conf="$rootfs/etc/pacman.conf"
 pacman_conf_new="$pacman_conf.caihong"
@@ -655,102 +569,71 @@ chmod --reference="$pacman_conf" "$pacman_conf_new"
 chown --reference="$pacman_conf" "$pacman_conf_new"
 mv -f -- "$pacman_conf_new" "$pacman_conf"
 
-echo "building and installing the Caihong libcamera stack"
-CHROOT_TOOL="$chroot_tool" \
-	"$project_dir/scripts/install-caihong-libcamera-rootfs.sh" "$rootfs"
-
-echo "building and installing Caihong Plasma Camera"
-CHROOT_TOOL="$chroot_tool" \
-	"$project_dir/scripts/install-caihong-plasma-camera-rootfs.sh" "$rootfs"
-
-echo "installing Caihong Toolbox"
-"$project_dir/scripts/install-caihong-toolbox-rootfs.sh" "$rootfs"
-
-echo "building the Caihong NVRAM MAC reader"
-install -D -m 0644 "$project_dir/tools/caihong-nvram-mac.c" \
-	"$rootfs/tmp/caihong-nvram-mac.c"
-"$chroot_tool" "$rootfs" "${chroot_env[@]}" \
-	gcc -O2 -Wall -Wextra -Werror \
-	-o /usr/local/libexec/caihong-nvram-mac \
-	/tmp/caihong-nvram-mac.c -lcrypto
-rm -f -- "$rootfs/tmp/caihong-nvram-mac.c"
-
-echo "building the Caihong NPU capability probe"
-install -D -m 0644 "$project_dir/tools/caihong-npu-info.c" \
-	"$rootfs/tmp/caihong-npu-info.c"
-"$chroot_tool" "$rootfs" "${chroot_env[@]}" \
-	gcc -O2 -Wall -Wextra -Werror \
-	-o /usr/local/sbin/caihong-npu-info \
-	/tmp/caihong-npu-info.c -ldl
-rm -f -- "$rootfs/tmp/caihong-npu-info.c"
-
+# libcamera, Plasma Camera, Toolbox, VA-API and the board utilities are all
+# part of the Caihong platform package.  Their only producer is
+# scripts/build-caihong-platform-package.sh.
 echo "installing packaged Caihong update payloads"
 install -d -m 0755 "$rootfs/tmp/caihong-packages"
-if [[ -n $platform_package ]]; then
-	install -m 0644 "$platform_package" \
-		"$rootfs/tmp/caihong-packages/${platform_package##*/}"
-fi
+install -m 0644 "$platform_package" \
+	"$rootfs/tmp/caihong-packages/${platform_package##*/}"
 if [[ -n $npu_package ]]; then
 	install -m 0644 "$npu_package" \
 		"$rootfs/tmp/caihong-packages/${npu_package##*/}"
 fi
-if [[ -n $platform_package ]]; then
-	CAIHONG_PLATFORM_ROOT="$rootfs" CAIHONG_PLATFORM_SKIP_DISPLAY_MANAGER=1 \
-	"$project_dir/packaging/caihong-platform/install-caihong-platform" \
-		"$rootfs/tmp/caihong-packages/${platform_package##*/}"
-fi
+CAIHONG_PLATFORM_ROOT="$rootfs" \
+CAIHONG_PLATFORM_IMAGE_BUILD=1 \
+"$project_dir/packaging/caihong-platform/install-caihong-platform" \
+	"$rootfs/tmp/caihong-packages/${platform_package##*/}"
 if [[ -n $npu_package ]]; then
 	CAIHONG_PLATFORM_ROOT="$rootfs" \
 	"$project_dir/packaging/caihong-platform/install-caihong-platform" \
 		"$rootfs/tmp/caihong-packages/${npu_package##*/}"
 fi
 
-# When a platform package is supplied, it carries the Qualcomm Iris VA-API
-# build that is also published for incremental updates.  Install that same
-# build instead of compiling a second copy inside the image, so a later device
-# update cannot silently replace the driver with different bytes.
-if [[ -n $platform_package ]]; then
-	echo "deferring Qualcomm Iris VA-API to the platform package"
-else
-	echo "building and installing Qualcomm Iris VA-API"
-	CHROOT_TOOL="$chroot_tool" \
-		"$project_dir/scripts/install-caihong-vaapi-rootfs.sh" "$rootfs"
-fi
+# The platform package is mandatory: it is the only source of device-specific
+# content for both full images and incremental updates.
+for path in \
+	usr/lib/dri/qcom_drv_video.so \
+	usr/lib/dri/msm_drv_video.so \
+	usr/bin/plasma-camera \
+	usr/bin/cam \
+	usr/bin/qcam \
+	usr/lib/libcamera.so.0.7 \
+	usr/lib/gstreamer-1.0/libgstlibcamera.so \
+	usr/local/sbin/qbootctl \
+	usr/share/caihong/vaapi-build-info \
+	usr/share/caihong/libcamera-build-info \
+	usr/share/caihong/plasma-camera-build-info; do
+	if [[ ! -e $rootfs/$path && ! -L $rootfs/$path ]]; then
+		echo "platform package did not provide /$path" >&2
+		exit 1
+	fi
+done
 
-if [[ -n $platform_package ]]; then
-	for path in usr/lib/dri/qcom_drv_video.so usr/lib/dri/msm_drv_video.so \
-		usr/share/caihong/vaapi-build-info; do
-		if [[ ! -e $rootfs/$path && ! -L $rootfs/$path ]]; then
-			echo "platform package did not provide /$path" >&2
-			exit 1
-		fi
-	done
-fi
-
-echo "building and installing qbootctl"
-if [[ ! -f $project_dir/external/qbootctl/meson.build ]]; then
-	echo "missing qbootctl source; run scripts/checkout-dependencies.sh" >&2
-	exit 1
-fi
-rsync -a --exclude=.git --exclude=build \
-	"$project_dir/external/qbootctl/" "$rootfs/tmp/qbootctl/"
+echo "enabling NetworkManager, Bluetooth and the Plasma display manager"
+systemctl --root="$rootfs" disable --no-reload sddm.service plasmalogin.service \
+	2>/dev/null || true
+rm -f -- "$rootfs/etc/systemd/system/display-manager.service"
+systemctl --root="$rootfs" disable dhcpcd.service 2>/dev/null || true
+systemctl --root="$rootfs" disable \
+	systemd-networkd.service systemd-networkd-wait-online.service \
+	2>/dev/null || true
+systemctl --root="$rootfs" disable hostapd.service dnsmasq.service \
+	2>/dev/null || true
+systemctl --root="$rootfs" enable \
+	NetworkManager.service bluetooth.service power-profiles-daemon.service \
+	sshd.service plasmalogin.service
+systemctl --root="$rootfs" set-default graphical.target
+systemctl --root="$rootfs" enable caihong-grow-rootfs.service
+systemctl --root="$rootfs" enable caihong-fix-kwin-brightness.service
+systemctl --root="$rootfs" enable caihong-clean-pogo-kde.service
+systemctl --root="$rootfs" enable caihong-keyboard.service
+systemctl --root="$rootfs" enable caihong-bluetooth-autostart.service
+systemctl --root="$rootfs" enable caihong-adbd.service
 "$chroot_tool" "$rootfs" "${chroot_env[@]}" \
-	meson setup /tmp/qbootctl/build /tmp/qbootctl \
-	--buildtype=release --prefix=/usr/local --bindir=sbin
-"$chroot_tool" "$rootfs" "${chroot_env[@]}" \
-	meson compile -C /tmp/qbootctl/build
-"$chroot_tool" "$rootfs" "${chroot_env[@]}" \
-	meson install -C /tmp/qbootctl/build --no-rebuild
-rm -rf -- "$rootfs/tmp/qbootctl"
-
-echo "installing Caihong-only runtime firmware"
-rm -rf -- "$rootfs/usr/lib/firmware"
-mkdir -p "$rootfs/usr/lib/firmware"
-(cd "$project_dir/firmware" && sha256sum -c SHA256SUMS)
-rsync -a --exclude=SOURCE.md --exclude=SHA256SUMS \
-	"$project_dir/firmware/." "$rootfs/usr/lib/firmware/"
-"$project_dir/scripts/build-caihong-audioreach-topology.sh" \
-	"$rootfs/usr/lib/firmware/qcom/sm8650/SM8650-MTP-tplg.bin"
+	usermod -aG audio,input,video,wheel alarm
+chmod 0440 "$rootfs/etc/sudoers.d/10-alarm"
+"$chroot_tool" "$rootfs" "${chroot_env[@]}" visudo -cf /etc/sudoers
 
 # Register the kernel and its dependency-closed module tree with pacman.  The
 # package script is explicitly barred from touching host block devices while
@@ -771,13 +654,10 @@ if ! "$chroot_tool" "$rootfs" "${chroot_env[@]}" \
 fi
 rm -f -- "$rootfs/tmp/linux-caihong.pkg.tar.zst"
 rm -rf -- "$rootfs/tmp/caihong-packages"
-rm -rf -- "$rootfs/usr/lib/firmware"
-install -d -m 0755 "$rootfs/usr/lib/firmware"
-rsync -a --exclude=SOURCE.md --exclude=SHA256SUMS \
-	"$project_dir/firmware/." "$rootfs/usr/lib/firmware/"
-"$project_dir/scripts/build-caihong-audioreach-topology.sh" \
-	"$rootfs/usr/lib/firmware/qcom/sm8650/SM8650-MTP-tplg.bin"
-"$project_dir/scripts/install-caihong-adbd.sh" "$rootfs"
+
+# The platform package is applied last and owns all device-specific files.
+# Re-copying firmware or helpers here would create a second producer whose
+# contents could diverge from the package delivered by future updates.
 
 rm -f -- "$rootfs/usr/bin/qemu-aarch64-static"
 rm -f -- "$rootfs/etc/resolv.conf"
@@ -796,7 +676,6 @@ unmount_rootfs
 	printf 'package_mirror=%s\n' "$mirror"
 	printf 'kernel_release=%s\n' "$kernel_release"
 	printf 'kernel_package=%s\n' "${kernel_package##*/}"
-	printf 'power_profiles_daemon_package=%s\n' "$ppd_package_name"
 	printf 'ssc_bundle_version=%s\n' "$(head -n 1 "$ssc_bundle/VERSION")"
 	if [[ -f $ssc_bundle/SHA256SUMS ]]; then
 		printf 'ssc_manifest_sha256=%s\n' \

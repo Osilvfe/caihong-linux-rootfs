@@ -86,6 +86,7 @@ usr/local/sbin/caihong-bluetooth-autostart
 usr/local/sbin/caihong-hardware-mac
 usr/local/sbin/caihong-adbd-gadget
 usr/local/sbin/caihong-adbd-run
+usr/local/libexec/caihong-adbd-serial
 usr/local/sbin/caihong-hotspot
 usr/local/sbin/caihong-flashlight
 usr/local/sbin/caihong-flashlight-panel
@@ -98,6 +99,7 @@ usr/local/sbin/caihong-pen-pair
 usr/local/sbin/caihong-slot
 usr/local/sbin/caihong-autocharge
 usr/local/sbin/qbootctl
+usr/share/caihong/qbootctl-build-info
 usr/share/applications/caihong-switch-to-android.desktop
 usr/share/plasma/plasmoids/org.ahaan.flashlight/metadata.json
 usr/share/plasma/plasmoids/org.ahaan.flashlight/contents/ui/main.qml
@@ -108,9 +110,6 @@ usr/lib/linux-caihong/kernel-release
 usr/lib/modules-load.d/caihong.conf
 usr/lib/systemd/system/rtkit-daemon.service
 usr/share/dbus-1/system-services/org.freedesktop.RealtimeKit1.service
-usr/bin/cam
-usr/bin/plasma-camera
-usr/bin/qcam
 usr/bin/caihong-toolbox
 usr/lib/caihong-toolbox/caihong-toolbox-service
 usr/lib/caihong-toolbox/caihong_toolbox/gui.py
@@ -121,6 +120,9 @@ usr/share/polkit-1/actions/org.caihong.toolbox.policy
 usr/share/applications/caihong-toolbox.desktop
 usr/share/icons/hicolor/scalable/apps/caihong-toolbox.svg
 usr/share/caihong/toolbox-build-info
+usr/bin/plasma-camera
+usr/bin/cam
+usr/bin/qcam
 usr/lib/dri/qcom_drv_video.so
 usr/lib/dri/msm_drv_video.so
 usr/share/caihong/vaapi-build-info
@@ -128,6 +130,7 @@ usr/lib/gstreamer-1.0/libgstlibcamera.so
 usr/lib/libcamera-base.so.0.7.2
 usr/lib/libcamera.so.0.7
 usr/lib/libcamera.so.0.7.2
+usr/share/caihong/qbootctl-build-info
 usr/share/caihong/libcamera-build-info
 usr/share/caihong/plasma-camera-build-info
 usr/share/alsa/ucm2/Qualcomm/sm8650/Caihong/HiFi.conf
@@ -242,6 +245,18 @@ if ! grep -qx "source_commit=$qcom_va_commit" \
 	echo "rootfs Qualcomm VA-API source commit does not match the workspace" >&2
 	failed=1
 fi
+qbootctl_source="$project_dir/external/qbootctl"
+if [[ -d $qbootctl_source/.git ]]; then
+	qbootctl_commit=$(git -C "$qbootctl_source" rev-parse --verify HEAD)
+else
+	qbootctl_commit=$(sed -n 's/^QBOOTCTL_COMMIT=//p' \
+		"$project_dir/build/dependencies.resolved.env" 2>/dev/null | tail -n 1)
+fi
+if [[ -n $qbootctl_commit ]] && ! grep -qx "source_commit=$qbootctl_commit" \
+	"$target/usr/share/caihong/qbootctl-build-info" 2>/dev/null; then
+	echo "rootfs qbootctl source commit does not match the workspace" >&2
+	failed=1
+fi
 
 for path in $required_paths; do
 	if [ ! -e "$target/$path" ] && [ ! -L "$target/$path" ]; then
@@ -259,11 +274,6 @@ if [ "$(readlink "$target/etc/systemd/system/display-manager.service" 2>/dev/nul
 	echo "display-manager.service does not point to Plasma Login Manager" >&2
 	failed=1
 fi
-if [ ! -x "$target/usr/bin/glib-mkenums" ]; then
-	echo "power-profiles-daemon build tools are missing: /usr/bin/glib-mkenums" >&2
-	failed=1
-fi
-
 pen_script="$target/usr/local/sbin/caihong-pen-charge"
 pen_service="$target/etc/systemd/system/caihong-pen-charge.service"
 if grep -q '/usr/local/lib/caihong/caihong_pen_power\.ko' \

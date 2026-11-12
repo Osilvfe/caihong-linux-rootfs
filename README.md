@@ -39,9 +39,12 @@ development release for this device; review the status table before installing.
   both direct-root boot images and the matching kernel modules.
 - `linux-caihong-<version>-1.aarch64.rpm`: RPM package for Fedora-based Armada
   containing the same kernel payload.
-- `caihong-platform-archlinuxarm-<version>.tar.zst`: incremental update payload
-  for Caihong services, firmware, tools, Caihong Toolbox, the Qualcomm Iris
-  VA-API driver and device integration.
+- `caihong-platform-archlinuxarm-<version>.tar.zst`: the complete device payload
+  for Caihong services, firmware, tools, Caihong Toolbox, libcamera, Plasma
+  Camera, qbootctl, power-profiles-daemon with the Qualcomm CPU driver, the
+  Qualcomm Iris VA-API driver and device integration. It
+  is both the incremental update and the only device-content source installed
+  into a freshly built rootfs image.
 - `caihong-npu-<version>-lib[64].tar.zst`: incremental update payload for the
   Qualcomm NPU runtime and Hexagon DSP components.
 
@@ -268,6 +271,13 @@ it, later logins leave it removed. Add it again with
 The rootfs also includes the Caihong SSC service, custom libcamera stack,
 Plasma Camera integration, Caihong Toolbox, firmware, audio topology and
 matching kernel modules.
+
+ADB uses the device serial from `oplusboot.serialno` (falling back to
+`androidboot.serialno`) as its USB serial number. To override it, write one
+non-empty value without spaces to `/etc/caihong-adbd-serial`; the value is used
+verbatim. If neither source is available, it derives a stable
+`caihong-<machine-id prefix>` serial, and only uses `caihong-adb` when no valid
+machine ID exists.
 
 Charging defaults to automatic operation with no extra charge limit. Settings
 persist only when explicitly saved with `--save` and restored by enabling

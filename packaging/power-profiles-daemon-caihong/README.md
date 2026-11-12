@@ -41,13 +41,13 @@ built-in defaults (70 and 50) are used.
 ## Build
 
 `scripts/checkout-dependencies.sh` checks out the pinned upstream commit into
-`external/power-profiles-daemon`. During a rootfs build,
-`scripts/package-archlinuxarm-rootfs.sh` applies `0001-qcom-cpufreq.patch` and
-runs `build-rootfs-package.sh` inside the native AArch64 chroot, then installs
-the resulting `power-profiles-daemon-caihong` pacman package. The stock
-`power-profiles-daemon` package is intentionally not installed; the custom
-package provides, conflicts with and replaces it, and keeps the upstream
-service, D-Bus and polkit file names.
+`external/power-profiles-daemon`. The platform package build applies
+`0001-qcom-cpufreq.patch` through `scripts/install-caihong-ppd-stage.sh` inside
+the shared AArch64 build root, then places the resulting files in
+`caihong-platform`. Rootfs image builds install that same package instead of
+building a second copy. The stock `power-profiles-daemon` package is replaced
+by the packaged binary while keeping the upstream service, D-Bus and polkit
+file names.
 
 To rebuild the package by hand on an AArch64 Arch Linux system:
 

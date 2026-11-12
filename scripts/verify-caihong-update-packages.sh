@@ -85,11 +85,59 @@ verify_platform()
 			usr/share/caihong/toolbox-build-info \
 			usr/lib/dri/qcom_drv_video.so \
 			usr/lib/dri/msm_drv_video.so \
-			usr/share/caihong/vaapi-build-info; do
+			usr/share/caihong/vaapi-build-info \
+			usr/bin/plasma-camera \
+			usr/bin/cam \
+			usr/bin/qcam \
+			usr/lib/libcamera.so.0.7 \
+			usr/lib/libcamera-base.so.0.7.2 \
+			usr/lib/gstreamer-1.0/libgstlibcamera.so \
+			usr/share/caihong/libcamera-build-info \
+			usr/share/caihong/plasma-camera-build-info \
+			usr/local/sbin/qbootctl \
+			usr/share/caihong/qbootctl-build-info \
+			usr/lib/power-profiles-daemon \
+			usr/lib/systemd/system/power-profiles-daemon.service \
+			usr/share/dbus-1/system-services/net.hadess.PowerProfiles.service \
+			usr/share/polkit-1/actions/power-profiles-daemon.policy \
+			usr/share/caihong/ppd-build-info \
+			usr/local/libexec/caihong-adbd-serial \
+			usr/local/sbin/caihong-adbd-gadget \
+			usr/local/libexec/caihong-nvram-mac \
+			usr/local/sbin/caihong-npu-info; do
 			grep -Fqx "$path" <<<"$listing" || fail "$archive is missing $path"
 		done
 		if [[ $(bsdtar -xOf "$archive" usr/share/caihong/vaapi-build-info) != *source_commit=* ]]; then
 			fail "$archive has no VA-API source revision metadata"
+		fi
+	else
+		for path in \
+			usr/bin/plasma-camera \
+			usr/bin/cam \
+			usr/bin/qcam \
+			usr/lib64/libcamera.so.0.7 \
+			usr/lib64/libcamera-base.so.0.7.2 \
+			usr/lib64/gstreamer-1.0/libgstlibcamera.so \
+			usr/lib64/dri/qcom_drv_video.so \
+			usr/lib64/dri/msm_drv_video.so \
+			usr/share/caihong/libcamera-build-info \
+			usr/share/caihong/plasma-camera-build-info \
+			usr/share/caihong/vaapi-build-info \
+			usr/local/sbin/qbootctl \
+			usr/share/caihong/qbootctl-build-info \
+			usr/lib/power-profiles-daemon \
+			usr/lib/systemd/system/power-profiles-daemon.service \
+			usr/share/dbus-1/system-services/net.hadess.PowerProfiles.service \
+			usr/share/polkit-1/actions/power-profiles-daemon.policy \
+			usr/share/caihong/ppd-build-info \
+			usr/local/libexec/caihong-adbd-serial \
+			usr/local/sbin/caihong-adbd-gadget \
+			usr/local/libexec/caihong-nvram-mac \
+			usr/local/sbin/caihong-npu-info; do
+			grep -Fqx "$path" <<<"$listing" || fail "$archive is missing $path"
+		done
+		if grep -Fqx 'etc/sudoers.d/10-alarm' <<<"$listing"; then
+			fail "$archive contains the Arch-only alarm sudo policy"
 		fi
 	fi
 }

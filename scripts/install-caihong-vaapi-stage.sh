@@ -12,6 +12,8 @@ CDPATH=
 
 project_dir=$(cd -- "$(dirname -- "$0")/.." && pwd)
 stage=${1:-}
+build_root=${CAIHONG_BUILD_ROOT:-}
+libdir=${LIBDIR:-lib}
 source_tree="$project_dir/external/qcom-va-driver"
 
 if [[ -z $stage || ! -d $stage ]]; then
@@ -34,27 +36,22 @@ for path in meson.build meson_options.txt src/backend.cpp src/av1.cpp; do
 	fi
 done
 
-for tool in git meson ninja pkg-config rsync; do
+for tool in chroot git meson rsync; do
 	if ! command -v "$tool" >/dev/null 2>&1; then
 		echo "missing host tool: $tool" >&2
 		exit 1
 	fi
 done
 
-# The driver links against the target's libva, libdrm and Mesa.  A cross build
-# would need a full sysroot, so only build it where it actually runs.
-if [[ $(uname -m) != aarch64 && ${CAIHONG_ALLOW_FOREIGN_VAAPI:-0} != 1 ]]; then
-	echo "qcom-va-driver must be built on AArch64" >&2
-	echo "set CAIHONG_ALLOW_FOREIGN_VAAPI=1 only for a deliberate cross build" >&2
+if [[ -z $build_root || ! -d $build_root ]]; then
+	echo "CAIHONG_BUILD_ROOT must point to a prepared AArch64 build root" >&2
 	exit 1
 fi
-
-for dependency in libva libdrm egl glesv2 gbm; do
-	if ! pkg-config --exists "$dependency"; then
-		echo "missing build dependency: $dependency" >&2
-		exit 1
-	fi
-done
+build_root=$(cd -- "$build_root" && pwd)
+case $libdir in
+	lib|lib64) ;;
+	*) echo "LIBDIR must be lib or lib64" >&2; exit 2 ;;
+esac
 
 if [[ -d $source_tree/.git ]]; then
 	if [[ -n $(git -C "$source_tree" status --porcelain --untracked-files=no) ]]; then
@@ -100,32 +97,44 @@ trap cleanup EXIT HUP INT TERM
 
 mkdir -p "$source_copy" "$install_root"
 rsync -aHAX --numeric-ids --exclude=.git "$source_tree/" "$source_copy/"
+install -d -m 0755 "$build_root/var/tmp"
+rm -rf -- "$build_root/var/tmp/caihong-vaapi-src" \
+	"$build_root/var/tmp/caihong-vaapi-build" \
+	"$build_root/var/tmp/caihong-vaapi-install"
+rsync -aHAX --numeric-ids "$source_copy/" "$build_root/var/tmp/caihong-vaapi-src/"
 
 # Match scripts/install-caihong-vaapi-rootfs.sh.  CDSP and Vulkan VPP need the
 # full Hexagon/Vulkan SDK and are left out of the image build, so the update
 # must not silently change the feature set.  gpu_copy is explicit: "auto"
 # would fall back to CPU copying when a header is missing and produce a
 # package that behaves unlike the image.
-meson setup "$build_dir" "$source_copy" \
-	--prefix=/usr --libdir=lib --buildtype=release \
+chroot_env=(/usr/bin/env -i HOME=/root LANG=C
+	PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin)
+chroot "$build_root" "${chroot_env[@]}" \
+	meson setup /var/tmp/caihong-vaapi-build /var/tmp/caihong-vaapi-src \
+	--prefix=/usr --libdir="$libdir" --buildtype=release \
 	-Dgpu_copy=enabled -Dcdsp_vpp=disabled -Dvulkan_vpp=disabled \
 	-Dtests=false -Dv4l2_symlink=true
-meson compile -C "$build_dir"
-DESTDIR="$install_root" meson install -C "$build_dir" --no-rebuild
+chroot "$build_root" "${chroot_env[@]}" \
+	meson compile -C /var/tmp/caihong-vaapi-build
+chroot "$build_root" "${chroot_env[@]}" \
+	/usr/bin/env DESTDIR=/var/tmp/caihong-vaapi-install \
+	meson install -C /var/tmp/caihong-vaapi-build --no-rebuild
+rsync -aHAX --numeric-ids "$build_root/var/tmp/caihong-vaapi-install/" "$install_root/"
 
-for path in usr/lib/dri/qcom_drv_video.so usr/lib/dri/msm_drv_video.so; do
+for path in "usr/$libdir/dri/qcom_drv_video.so" "usr/$libdir/dri/msm_drv_video.so"; do
 	if [[ ! -e $install_root/$path && ! -L $install_root/$path ]]; then
 		echo "Caihong VA-API install is missing /$path" >&2
 		exit 1
 	fi
 done
-if [[ ! -L $install_root/usr/lib/dri/msm_drv_video.so ]]; then
+if [[ ! -L $install_root/usr/$libdir/dri/msm_drv_video.so ]]; then
 	echo "Caihong VA-API msm alias is not a symlink" >&2
 	exit 1
 fi
 
-install -d -m 0755 "$stage/usr/lib/dri" "$stage/usr/share/caihong"
-rsync -aHAX --numeric-ids "$install_root/usr/lib/dri/" "$stage/usr/lib/dri/"
+install -d -m 0755 "$stage/usr/$libdir/dri" "$stage/usr/share/caihong"
+rsync -aHAX --numeric-ids "$install_root/usr/$libdir/dri/" "$stage/usr/$libdir/dri/"
 for directory in usr/share/doc/qcom-va-driver usr/share/licenses/qcom-va-driver; do
 	if [[ -d $install_root/$directory ]]; then
 		install -d -m 0755 "$stage/$directory"
@@ -137,5 +146,8 @@ source_commit=$source_commit
 version=$version
 INFO
 chmod 0644 "$stage/usr/share/caihong/vaapi-build-info"
+rm -rf -- "$build_root/var/tmp/caihong-vaapi-src" \
+	"$build_root/var/tmp/caihong-vaapi-build" \
+	"$build_root/var/tmp/caihong-vaapi-install"
 
 echo "Qualcomm Iris VA-API staged for the Caihong platform package"

@@ -34,10 +34,10 @@ jobs:
             alsa-utils bc bison build-essential ccache curl dwarves file flex git \
             kmod libarchive-tools libegl-dev libdrm-dev libelf-dev libgbm-dev \
             libgles-dev libssl-dev libva-dev meson ninja-build pkg-config \
-            python3 rpm rsync shellcheck zstd
+            python3 rpm rsync shellcheck skopeo umoci zstd
 
-      - name: Resolve kernel dependencies
-        run: DEPENDENCY_SCOPE=kernel scripts/checkout-dependencies.sh
+      - name: Resolve kernel and platform dependencies
+        run: scripts/checkout-dependencies.sh
 
       - name: Restore compiler cache
         uses: actions/cache/restore@v4
@@ -62,8 +62,12 @@ jobs:
             KERNEL_CC="ccache gcc" KERNEL_HOSTCC="ccache gcc" \
             scripts/build-kernel-release.sh
           scripts/build-linux-caihong-rpm.sh modules-current release
-          DISTRIBUTION=archlinuxarm scripts/build-caihong-platform-package.sh release
-          DISTRIBUTION=armada scripts/build-caihong-platform-package.sh release
+          sudo -E env PATH="$PATH" \
+            DISTRIBUTION=archlinuxarm scripts/build-caihong-platform-package.sh release
+          sudo -E env PATH="$PATH" \
+            DISTRIBUTION=armada LIBDIR=lib64 \
+            scripts/build-caihong-platform-package.sh release
+          sudo chown -R "$USER:$USER" release
           if [[ "${{ inputs.include_npu }}" == true ]]; then
             scripts/build-caihong-npu-package.sh release
             LIBDIR=lib64 scripts/build-caihong-npu-package.sh release

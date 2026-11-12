@@ -53,12 +53,12 @@ configure()
 	printf 'Caihong ADB\n' > "$gadget_dir/strings/0x409/product"
 	printf 'ADB\n' > "$config_dir/strings/0x409/configuration"
 	printf '250\n' > "$config_dir/MaxPower"
-	local serial_file=/etc/caihong-adbd-serial
-	if [[ -r $serial_file ]]; then
-		head -n 1 "$serial_file" > "$gadget_dir/strings/0x409/serialnumber"
-	else
-		printf 'caihong-adb\n' > "$gadget_dir/strings/0x409/serialnumber"
-	fi
+	local serial
+	serial=$(/usr/local/libexec/caihong-adbd-serial) || {
+		echo "unable to determine the ADB serial" >&2
+		return 1
+	}
+	printf '%s\n' "$serial" > "$gadget_dir/strings/0x409/serialnumber"
 	(cd -- "$config_dir" && ln -s -- "../../functions/$function_name" "$function_name")
 	mount -t functionfs adb "$mount_point" -o "uid=$adbd_uid,gid=$adbd_gid"
 }

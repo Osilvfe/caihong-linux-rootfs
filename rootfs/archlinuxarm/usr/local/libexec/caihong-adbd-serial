@@ -1,0 +1,65 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+# Copyright (c) 2026 Osilvfe <osilvfe@gmail.com>
+#
+# Print the USB/adb serial for this device.  The Android bootloader passes the
+# factory serial as oplusboot.serialno; an explicit override file is useful for
+# repaired boards or units whose NVRAM serial is unavailable.
+set -eu
+CDPATH=
+
+serial_file=${CAIHONG_ADBD_SERIAL_FILE:-/etc/caihong-adbd-serial}
+cmdline_file=${CAIHONG_ADBD_CMDLINE_FILE:-/proc/cmdline}
+machine_id_file=${CAIHONG_ADBD_MACHINE_ID_FILE:-/etc/machine-id}
+fallback=${CAIHONG_ADBD_SERIAL_FALLBACK:-caihong-adb}
+
+valid()
+{
+	case $1 in
+		'') return 1 ;;
+		*[[:space:][:cntrl:]]*) return 1 ;;
+	esac
+	[ "${#1}" -le 32 ]
+}
+
+if [ -r "$serial_file" ]; then
+	serial=$(head -n 1 "$serial_file" | tr -d '\r\n')
+	if valid "$serial"; then
+		printf '%s\n' "$serial"
+		exit 0
+	fi
+	echo "ignoring invalid ADB serial in $serial_file" >&2
+fi
+
+serial=
+if [ -r "$cmdline_file" ]; then
+	read -r cmdline < "$cmdline_file" || true
+	for token in $cmdline; do
+		case $token in
+			oplusboot.serialno=*) serial=${token#oplusboot.serialno=} ;;
+			androidboot.serialno=*)
+				[ -n "$serial" ] || serial=${token#androidboot.serialno=}
+				;;
+		esac
+	done
+fi
+if valid "$serial"; then
+	printf '%s\n' "$serial"
+	exit 0
+fi
+
+# Some repaired boards boot without the bootloader serial properties.  Derive a
+# stable serial from the systemd machine ID instead of advertising the same
+# generic name for every device.  systemd creates this file before adbd starts.
+if [ -r "$machine_id_file" ]; then
+	read -r machine_id < "$machine_id_file" || true
+	case $machine_id in
+		????????????????????????????????) serial=caihong-${machine_id%????????????????} ;;
+	esac
+fi
+if valid "$serial"; then
+	printf '%s\n' "$serial"
+	exit 0
+fi
+
+printf '%s\n' "$fallback"

@@ -49,7 +49,10 @@ root=PARTLABEL=linux rootfstype=ext4 rootwait rw
 - `linux-caihong-<version>-1.aarch64.rpm`：供 Fedora 基础 Armada 使用的 RPM，
   内容与 pacman 包相同。
 - `caihong-platform-archlinuxarm-<version>.tar.zst`：Caihong 服务、固件、
-  工具、Caihong Toolbox、Qualcomm Iris VA-API 驱动和设备集成的增量更新载荷。
+  工具、Caihong Toolbox、libcamera、Plasma Camera、qbootctl、带 Qualcomm
+  CPU 驱动的 power-profiles-daemon、Qualcomm Iris VA-API 驱动和设备集成的
+  完整载荷。它既是增量更新包，也是新构建 rootfs
+  镜像中设备内容的唯一来源。
 - `caihong-npu-<version>-lib[64].tar.zst`：Qualcomm NPU 运行时与 Hexagon DSP
   组件的增量更新载荷。
 
@@ -259,6 +262,12 @@ root 权限。
 
 rootfs 还包含 Caihong SSC 服务、定制 libcamera、Plasma Camera 集成、
 Caihong Toolbox、设备固件、音频拓扑和匹配的内核模块。
+
+ADB 使用 `oplusboot.serialno` 中的设备序列号作为 USB 序列号，缺失时回退到
+`androidboot.serialno`。若要覆盖，可在 `/etc/caihong-adbd-serial` 写入一行
+不含空白的值，该值会原样使用。两个来源都不可用时，会根据 machine-id 派生
+稳定的 `caihong-<machine-id 前缀>` 串号；只有 machine-id 也无效时才回退为
+`caihong-adb`。
 
 默认自动充电，不额外限制电量。只有显式使用 `--save` 保存设置并启用
 `caihong-charge.service` 才会在开机时恢复；该服务默认不启用。

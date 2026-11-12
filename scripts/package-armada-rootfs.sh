@@ -13,7 +13,6 @@ output=${1:-"$project_dir/caihong-armada-rootfs.img"}
 armada_image=${ARMADA_IMAGE:-ghcr.io/armada-os/armada:stable}
 module_tree=${MODULE_TREE:-"$project_dir/modules-current"}
 release_dir=${RELEASE_DIR:-"$project_dir/release"}
-ssc_bundle=${SSC_BUNDLE:-"$project_dir/firmware-assets/caihong-ssc"}
 npu_bundle=${NPU_BUNDLE:-"$project_dir/firmware-assets/caihong-npu"}
 platform_package=${CAIHONG_PLATFORM_PACKAGE:-}
 npu_package=${CAIHONG_NPU_PACKAGE:-}
@@ -38,8 +37,8 @@ esac
 (( image_slack_percent >= 5 )) || fail "IMAGE_SLACK_PERCENT must be at least 5"
 [[ $sparse_image == 0 || $sparse_image == 1 ]] || fail "SPARSE_IMAGE must be 0 or 1"
 
-required_tools=(blkid bsdtar cc chroot depmod e2fsck file find img2simg meson
-	mkfs.ext4 mount ninja python3 rsync sha256sum skopeo systemctl umoci umount)
+required_tools=(blkid bsdtar chroot depmod e2fsck find img2simg mkfs.ext4
+	mount python3 rsync sha256sum skopeo systemctl umoci umount)
 for tool in "${required_tools[@]}"; do
 	command -v "$tool" >/dev/null 2>&1 || fail "missing host tool: $tool"
 done
@@ -48,8 +47,6 @@ done
 [[ -d $module_tree/lib/modules ]] || fail "missing module tree: $module_tree"
 [[ -d $npu_bundle ]] || fail "missing release NPU bundle: $npu_bundle"
 [[ -f $release_dir/KERNEL_RELEASE ]] || fail "missing release/KERNEL_RELEASE"
-[[ -f $project_dir/external/qbootctl/meson.build ]] || \
-	fail "missing qbootctl source; run scripts/checkout-dependencies.sh"
 platform_pointer=$release_dir/CAIHONG_PLATFORM_PACKAGE_ARMADA
 [[ -f $platform_pointer ]] || platform_pointer=$release_dir/CAIHONG_PLATFORM_PACKAGE
 npu_pointer=$release_dir/CAIHONG_NPU_PACKAGE_LIB64
@@ -149,66 +146,61 @@ if [[ -e $rootfs/etc/resolv.conf || -L $rootfs/etc/resolv.conf ]]; then
 fi
 rm -f -- "$rootfs/etc/resolv.conf"
 cp -L /etc/resolv.conf "$rootfs/etc/resolv.conf"
-camera_build_packages=(
-	gcc gcc-c++ cmake extra-cmake-modules gettext meson ninja-build pkgconf-pkg-config
-	python3-jinja2 python3-ply python3-pyyaml
-	gnutls-devel libyaml-devel libevent-devel libunwind-devel openssl-devel
-	elfutils-libelf-devel libdrm-devel libjpeg-turbo-devel systemd-devel wayland-devel
-	mesa-libEGL-devel mesa-libGLES-devel
-	gstreamer1-devel gstreamer1-plugins-base-devel
-	qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtmultimedia-devel
-	qt6-qtsensors-devel qt6-qtsvg-devel
-	kf6-kconfig-devel kf6-kcoreaddons-devel kf6-ki18n-devel
-	kf6-kirigami-devel kf6-kirigami-addons-devel exiv2-devel
-)
-camera_build_remove=()
-for package in "${camera_build_packages[@]}"; do
-	if ! chroot "$rootfs" rpm -q "$package" >/dev/null 2>&1; then
-		camera_build_remove+=("$package")
-	fi
-done
 SYSTEMD_OFFLINE=1 chroot "$rootfs" /usr/bin/env -i \
 	HOME=/root LANG=C PATH=/usr/sbin:/usr/bin:/sbin:/bin \
 	/usr/bin/dnf5 -y install --setopt=install_weak_deps=False \
 	dnsmasq e2fsprogs hostapd iio-sensor-proxy openssh-server \
 	android-tools python3-gobject \
-	libbsd libqmi libqrtr-glib libyaml protobuf-c \
-	libcamera libcamera-ipa libcamera-tools libcamera-qcam \
-	libcamera-gstreamer plasma-camera \
-	"${camera_build_packages[@]}"
+	libbsd libqmi libqrtr-glib libyaml protobuf-c
 rm -f -- "$rootfs/etc/resolv.conf"
 if (( resolver_saved )); then
 	cp -a --no-dereference "$work_dir/resolv.conf.original" "$rootfs/etc/resolv.conf"
 fi
 
-echo "overlaying Caihong board integration"
-rsync -aHAX --numeric-ids --chown=0:0 \
-	"$project_dir/rootfs/archlinuxarm/" "$rootfs/"
-rsync -aHAX --numeric-ids --chown=0:0 \
-	"$project_dir/rootfs/armada/" "$rootfs/"
-rm -f -- "$rootfs/etc/sudoers.d/10-alarm"
-rm -f -- "$rootfs/etc/alsa/state-daemon.conf"
+# The platform payload owns the complete device overlay, camera stack and
+# board utilities.  It is installed later through the same package used for
+# incremental updates; do not copy rootfs/archlinuxarm or rootfs/armada here.
 
-echo "building and installing the Caihong libcamera stack"
-CHROOT_TOOL=chroot LIBCAMERA_LIBDIR=lib64 \
-	"$project_dir/scripts/install-caihong-libcamera-rootfs.sh" "$rootfs"
+echo "installing matching Caihong kernel modules"
+rm -rf -- "$rootfs/usr/lib/modules"
+CAIHONG_EXPECTED_RELEASE="$kernel_release" \
+	"$project_dir/scripts/install-caihong-modules.sh" "$module_tree" "$rootfs"
+rm -f -- "$rootfs/usr/local/lib/caihong/caihong_pen_power.ko"
 
-echo "building and installing Caihong Plasma Camera"
-CHROOT_TOOL=chroot \
-	"$project_dir/scripts/install-caihong-plasma-camera-rootfs.sh" "$rootfs"
-
-if (( ${#camera_build_remove[@]} )); then
-	echo "removing temporary camera build packages"
-	SYSTEMD_OFFLINE=1 chroot "$rootfs" /usr/bin/env -i \
-		HOME=/root LANG=C PATH=/usr/sbin:/usr/bin:/sbin:/bin \
-		/usr/bin/dnf5 -y remove "${camera_build_remove[@]}"
+echo "installing packaged Caihong update payloads"
+install -d -m 0755 "$rootfs/tmp/caihong-packages"
+install -m 0644 "$platform_package" \
+	"$rootfs/tmp/caihong-packages/${platform_package##*/}"
+if [[ -n $npu_package ]]; then
+	install -m 0644 "$npu_package" \
+		"$rootfs/tmp/caihong-packages/${npu_package##*/}"
 fi
-SYSTEMD_OFFLINE=1 chroot "$rootfs" /usr/bin/env -i \
-	HOME=/root LANG=C PATH=/usr/sbin:/usr/bin:/sbin:/bin \
-	/usr/bin/dnf5 clean all
+CAIHONG_PLATFORM_ROOT="$rootfs" CAIHONG_PLATFORM_IMAGE_BUILD=1 \
+"$project_dir/packaging/caihong-platform/install-caihong-platform" \
+	"$rootfs/tmp/caihong-packages/${platform_package##*/}"
+if [[ -n $npu_package ]]; then
+	CAIHONG_PLATFORM_ROOT="$rootfs" \
+	"$project_dir/packaging/caihong-platform/install-caihong-platform" \
+		"$rootfs/tmp/caihong-packages/${npu_package##*/}"
+fi
+
+if [[ -n $kernel_rpm ]]; then
+	install -m 0644 "$kernel_rpm" "$rootfs/tmp/linux-caihong.rpm"
+	chroot "$rootfs" /usr/bin/env -i \
+		HOME=/root LANG=C PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+		/usr/bin/dnf5 -y --disablerepo='*' install /tmp/linux-caihong.rpm
+	chroot "$rootfs" rpm -q linux-caihong >/dev/null || \
+		fail "linux-caihong RPM was not registered"
+	rm -f -- "$rootfs/tmp/linux-caihong.rpm"
+fi
+rm -rf -- "$rootfs/tmp/caihong-packages"
+
+# The platform package already provided firmware, audio topology, services and
+# the device overlay.  Re-copying them here would create a second producer.
 
 # The regular image uses the Arch Linux ARM account. Armada owns its account
-# and home layout, so adjust only the three Caihong KDE integration files.
+# and home layout, so adjust only the three Caihong KDE integration files after
+# the platform payload has installed them.
 python3 - "$rootfs" <<'PY'
 from pathlib import Path
 import sys
@@ -242,80 +234,6 @@ elif [[ ! -x $rootfs/usr/bin/resize2fs ]]; then
 	fail "Armada image does not contain resize2fs"
 fi
 
-echo "building Caihong hardware-address reader"
-install -d -m 0755 "$rootfs/usr/local/libexec"
-cc -O2 -Wall -Wextra -Werror \
-	-o "$rootfs/usr/local/libexec/caihong-nvram-mac" \
-	"$project_dir/tools/caihong-nvram-mac.c" -lcrypto
-file "$rootfs/usr/local/libexec/caihong-nvram-mac" | grep -q 'ARM aarch64' || \
-	fail "Caihong hardware-address reader is not AArch64"
-
-echo "building Caihong NPU capability probe"
-cc -O2 -Wall -Wextra -Werror \
-	-o "$rootfs/usr/local/sbin/caihong-npu-info" \
-	"$project_dir/tools/caihong-npu-info.c" -ldl
-file "$rootfs/usr/local/sbin/caihong-npu-info" | grep -q 'ARM aarch64' || \
-	fail "Caihong NPU capability probe is not AArch64"
-
-echo "installing Caihong firmware and AudioReach topology"
-(cd "$project_dir/firmware" && sha256sum -c SHA256SUMS)
-install -d -m 0755 "$rootfs/usr/lib/firmware"
-rsync -aHAX --numeric-ids --chown=0:0 \
-	--exclude=SOURCE.md --exclude=SHA256SUMS \
-	"$project_dir/firmware/" "$rootfs/usr/lib/firmware/"
-"$project_dir/scripts/build-caihong-audioreach-topology.sh" \
-	"$rootfs/usr/lib/firmware/qcom/sm8650/SM8650-MTP-tplg.bin"
-
-echo "installing Caihong sensor service"
-FORCE=1 "$project_dir/scripts/ssc/install-rootfs.sh" "$ssc_bundle" "$rootfs"
-
-echo "installing matching Caihong kernel modules"
-rm -rf -- "$rootfs/usr/lib/modules"
-CAIHONG_EXPECTED_RELEASE="$kernel_release" \
-	"$project_dir/scripts/install-caihong-modules.sh" "$module_tree" "$rootfs"
-rm -f -- "$rootfs/usr/local/lib/caihong/caihong_pen_power.ko"
-"$project_dir/scripts/install-caihong-adbd.sh" "$rootfs"
-
-echo "installing packaged Caihong update payloads"
-install -d -m 0755 "$rootfs/tmp/caihong-packages"
-if [[ -n $platform_package ]]; then
-	install -m 0644 "$platform_package" \
-		"$rootfs/tmp/caihong-packages/${platform_package##*/}"
-fi
-if [[ -n $npu_package ]]; then
-	install -m 0644 "$npu_package" \
-		"$rootfs/tmp/caihong-packages/${npu_package##*/}"
-fi
-if [[ -n $platform_package ]]; then
-	CAIHONG_PLATFORM_ROOT="$rootfs" CAIHONG_PLATFORM_SKIP_DISPLAY_MANAGER=1 \
-	"$project_dir/packaging/caihong-platform/install-caihong-platform" \
-		"$rootfs/tmp/caihong-packages/${platform_package##*/}"
-fi
-if [[ -n $npu_package ]]; then
-	CAIHONG_PLATFORM_ROOT="$rootfs" \
-	"$project_dir/packaging/caihong-platform/install-caihong-platform" \
-		"$rootfs/tmp/caihong-packages/${npu_package##*/}"
-fi
-
-if [[ -n $kernel_rpm ]]; then
-	install -m 0644 "$kernel_rpm" "$rootfs/tmp/linux-caihong.rpm"
-	chroot "$rootfs" /usr/bin/env -i \
-		HOME=/root LANG=C PATH=/usr/sbin:/usr/bin:/sbin:/bin \
-		/usr/bin/dnf5 -y --disablerepo='*' install /tmp/linux-caihong.rpm
-	chroot "$rootfs" rpm -q linux-caihong >/dev/null || \
-		fail "linux-caihong RPM was not registered"
-	rm -f -- "$rootfs/tmp/linux-caihong.rpm"
-fi
-rm -rf -- "$rootfs/tmp/caihong-packages"
-
-echo "restoring Caihong firmware and AudioReach topology"
-install -d -m 0755 "$rootfs/usr/lib/firmware"
-rsync -aHAX --numeric-ids --chown=0:0 \
-	--exclude=SOURCE.md --exclude=SHA256SUMS \
-	"$project_dir/firmware/" "$rootfs/usr/lib/firmware/"
-"$project_dir/scripts/build-caihong-audioreach-topology.sh" \
-	"$rootfs/usr/lib/firmware/qcom/sm8650/SM8650-MTP-tplg.bin"
-
 echo "installing Caihong boot payload metadata"
 install -d -m 0755 "$rootfs/usr/lib/linux-caihong"
 install -m 0644 "$image_file" "$rootfs/usr/lib/linux-caihong/Image"
@@ -325,16 +243,6 @@ install -m 0644 "$boot_userdata" "$rootfs/usr/lib/linux-caihong/boot-userdata.im
 install -m 0755 "$project_dir/packaging/linux-caihong/install-current-slot" \
 	"$rootfs/usr/lib/linux-caihong/install-current-slot"
 printf '%s\n' "$kernel_release" > "$rootfs/usr/lib/linux-caihong/kernel-release"
-
-echo "building qbootctl"
-qbootctl_build="$work_dir/qbootctl-build"
-meson setup "$qbootctl_build" "$project_dir/external/qbootctl" \
-	--buildtype=release --prefix=/usr/local --bindir=sbin
-meson compile -C "$qbootctl_build"
-DESTDIR="$rootfs" meson install -C "$qbootctl_build" --no-rebuild
-[[ -x $rootfs/usr/local/sbin/qbootctl ]] || fail "qbootctl install failed"
-file "$rootfs/usr/local/sbin/qbootctl" | grep -q 'ARM aarch64' || \
-	fail "qbootctl is not AArch64"
 
 printf 'caihong\n' > "$rootfs/etc/hostname"
 printf 'LANG=en_US.UTF-8\n' > "$rootfs/etc/locale.conf"
