@@ -111,6 +111,9 @@ FORCE=1 "$project_dir/scripts/ssc/install-rootfs.sh" \
 install -D -m 0755 \
 	"$project_dir/packaging/caihong-platform/install-caihong-platform" \
 	"$stage/usr/libexec/caihong-platform/install-caihong-platform"
+install -D -m 0755 \
+	"$project_dir/packaging/caihong-platform/switch-display-manager.sh" \
+	"$stage/usr/libexec/caihong-platform/switch-display-manager"
 install -d -m 0755 "$stage/usr/share/caihong-package"
 install -d -m 0755 "$stage/usr/share/caihong-platform"
 printf '%s\n' aarch64 > "$stage/usr/share/caihong-package/architecture"

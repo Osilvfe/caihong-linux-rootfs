@@ -287,7 +287,7 @@ if [[ -n $npu_package ]]; then
 		"$rootfs/tmp/caihong-packages/${npu_package##*/}"
 fi
 if [[ -n $platform_package ]]; then
-	CAIHONG_PLATFORM_ROOT="$rootfs" \
+	CAIHONG_PLATFORM_ROOT="$rootfs" CAIHONG_PLATFORM_SKIP_DISPLAY_MANAGER=1 \
 	"$project_dir/packaging/caihong-platform/install-caihong-platform" \
 		"$rootfs/tmp/caihong-packages/${platform_package##*/}"
 fi

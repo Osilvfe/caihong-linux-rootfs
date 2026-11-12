@@ -26,7 +26,8 @@ class PlatformInstallerTests(unittest.TestCase):
         self.scratch = self.work / 'scratch'
         self.scratch.mkdir()
         self.environment = dict(os.environ, CAIHONG_PLATFORM_ROOT=str(self.root),
-                                TMPDIR=str(self.scratch))
+                                TMPDIR=str(self.scratch),
+                                CAIHONG_PLATFORM_SKIP_DISPLAY_MANAGER='1')
         self.pending = self.root / 'var/lib/caihong-config-pending/caihong-test'
         self.unit = 'etc/systemd/system/caihong-test.service'
         self.link = 'etc/systemd/system/multi-user.target.wants/caihong-test.service'
