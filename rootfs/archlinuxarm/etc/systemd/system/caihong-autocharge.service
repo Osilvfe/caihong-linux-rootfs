@@ -1,0 +1,12 @@
+[Unit]
+Description=Keep the Caihong battery inside a charge window
+After=systemd-udev-trigger.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/sbin/caihong-autocharge
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -240,6 +240,7 @@ root 权限。
 | `caihong-npu-info` | `sudo caihong-npu-info` 显示 CDSP 固件状态和 FastRPC 能力；`--self-test` 验证通用 v75 DSP 执行，`--htp-self-test` 验证浮点 QAIRT/QNN 图，`--htp-conv-self-test` 验证量化 Conv2d 并与 CPU 参考结果逐元素比较。 |
 | `caihong-bluetooth-autostart` | 启动时打开已经配置地址的蓝牙控制器。 |
 | `caihong-charge` | 使用 `status` / `health` 读取电池状态和固件健康数据；`sudo caihong-charge limit 75 80` 设置充电阈值，`sudo caihong-charge bypass on` / `off` 控制停充并保留适配器输入，不承诺电池完全隔离。 |
+| `caihong-autocharge` | 可选守护进程，通过切换停充把电量维持在设定的充电区间。使用 `sudo systemctl enable --now caihong-autocharge` 启用，并在 `/etc/caihong-autocharge.json` 中配置 `stop`、`resume` 和 `interval`；`--status` 显示当前判断。默认不启用，也不会修改 `caihong-charge` 已保存的阈值。 |
 | `caihong-pen-pair` | 使用通过 CPS8601 磁吸事件校验得到的地址配对手写笔，通常由 systemd 定时器调用。 |
 | `caihong-pen-charge` | 执行有时间限制的 CPS8601 充电与吸附观察，通常由 systemd 定时器调用。 |
 | `caihong-pen-autoconnect` | 恢复已配对手写笔连接和触摸屏手写笔扫描模式，通常由 systemd 定时器调用。 |
@@ -256,6 +257,14 @@ Caihong Toolbox、设备固件、音频拓扑和匹配的内核模块。
 默认自动充电，不额外限制电量。只有显式使用 `--save` 保存设置并启用
 `caihong-charge.service` 才会在开机时恢复；该服务默认不启用。
 固件报告的健康度和容量不是独立测得的电池损耗。
+
+`caihong-autocharge` 是可选的守护进程，与内核阈值二选一使用：控制器的原始
+电量达到 `stop` 时停充，降到 `resume` 时恢复充电。它读取
+`/etc/caihong-autocharge.json`（默认 `stop` 80、`resume` 79、`interval` 30 秒），
+只在状态变化时调用 `caihong-charge bypass`。该服务默认不启用，安装后仍保持
+原厂充电行为，直到执行 `sudo systemctl enable --now caihong-autocharge`。
+使用 `sudo systemctl disable --now caihong-autocharge` 关闭；停充仍不承诺
+电池硬件隔离。
 
 ### WLAN 与蓝牙地址回退
 

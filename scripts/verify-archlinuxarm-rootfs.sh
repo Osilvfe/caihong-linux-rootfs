@@ -17,11 +17,13 @@ etc/NetworkManager/conf.d/30-caihong-hotspot.conf
 etc/bluetooth/main.conf
 etc/locale.conf
 etc/xdg/bluedevilglobalrc
+etc/caihong-autocharge.json
 etc/caihong-hotspot.conf
 etc/caihong-pen.json
 etc/modules-load.d/caihong.conf
 etc/sudoers.d/10-alarm
 etc/systemd/system/caihong-grow-rootfs.service
+etc/systemd/system/caihong-autocharge.service
 etc/systemd/system/caihong-fix-kwin-brightness.service
 etc/systemd/system/caihong-clean-pogo-kde.service
 etc/systemd/system/caihong-bluetooth-autostart.service
@@ -92,6 +94,7 @@ usr/local/sbin/caihong-pen-autoconnect
 usr/local/sbin/caihong-pen-charge
 usr/local/sbin/caihong-pen-pair
 usr/local/sbin/caihong-slot
+usr/local/sbin/caihong-autocharge
 usr/local/sbin/qbootctl
 usr/share/applications/caihong-switch-to-android.desktop
 usr/lib/linux-caihong/boot-linux.img
