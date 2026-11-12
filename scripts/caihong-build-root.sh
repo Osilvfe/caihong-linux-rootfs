@@ -80,6 +80,8 @@ mount_api()
 	if ! mountpoint -q "$root/run"; then
 		mount -t tmpfs -o mode=0755,nosuid,nodev tmpfs "$root/run"
 	fi
+	rm -f -- "$root/etc/resolv.conf"
+	cp -L -- /etc/resolv.conf "$root/etc/resolv.conf"
 }
 
 unmount_api()

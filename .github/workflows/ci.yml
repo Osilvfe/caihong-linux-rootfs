@@ -24,6 +24,7 @@ jobs:
           python3 -m compileall -q scripts
           python3 tools/test-rootfs-camera-policy.py
           python3 tools/test-platform-payload.py
+          python3 tools/test-build-root-resolver.py
           python3 tools/test-adbd-serial.py
           python3 tools/test-rootfs-runtime.py
           python3 tools/test-display-manager-migration.py
