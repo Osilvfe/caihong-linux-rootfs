@@ -90,23 +90,23 @@ fi
 
 if [ "$distribution" = archlinuxarm ] || [ "$distribution" = armada ]; then
 	"$project_dir/scripts/caihong-build-root.sh" prepare \
-		"$build_root" "$distribution" >/dev/null
+		"$build_root" "$distribution"
 	if [ "$distribution" = archlinuxarm ]; then
 		CAIHONG_BUILD_ROOT="$build_root" \
-		"$project_dir/scripts/install-caihong-toolbox-rootfs.sh" "$stage" >/dev/null
+		"$project_dir/scripts/install-caihong-toolbox-rootfs.sh" "$stage"
 	fi
 	CAIHONG_BUILD_ROOT="$build_root" LIBDIR="$libdir" \
-	"$project_dir/scripts/install-caihong-vaapi-stage.sh" "$stage" >/dev/null
+	"$project_dir/scripts/install-caihong-vaapi-stage.sh" "$stage"
 	CAIHONG_BUILD_ROOT="$build_root" LIBCAMERA_LIBDIR="$libdir" \
-	"$project_dir/scripts/install-caihong-libcamera-stage.sh" "$stage" >/dev/null
+	"$project_dir/scripts/install-caihong-libcamera-stage.sh" "$stage"
 	CAIHONG_BUILD_ROOT="$build_root" \
-	"$project_dir/scripts/install-caihong-plasma-camera-stage.sh" "$stage" >/dev/null
+	"$project_dir/scripts/install-caihong-plasma-camera-stage.sh" "$stage"
 	CAIHONG_BUILD_ROOT="$build_root" \
-	"$project_dir/scripts/install-caihong-qbootctl-stage.sh" "$stage" >/dev/null
+	"$project_dir/scripts/install-caihong-qbootctl-stage.sh" "$stage"
 	CAIHONG_BUILD_ROOT="$build_root" \
-	"$project_dir/scripts/install-caihong-utilities-stage.sh" "$stage" >/dev/null
+	"$project_dir/scripts/install-caihong-utilities-stage.sh" "$stage"
 	CAIHONG_BUILD_ROOT="$build_root" \
-	"$project_dir/scripts/install-caihong-ppd-stage.sh" "$stage" >/dev/null
+	"$project_dir/scripts/install-caihong-ppd-stage.sh" "$stage"
 	"$project_dir/scripts/caihong-build-root.sh" cleanup "$build_root"
 fi
 
