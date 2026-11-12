@@ -73,7 +73,6 @@ esac
 
 work_dir=$(mktemp -d "$project_dir/build/caihong-libcamera-stage.XXXXXX")
 source_copy="$work_dir/libcamera"
-build_dir="$work_dir/build"
 install_root="$work_dir/root"
 cleanup()
 {

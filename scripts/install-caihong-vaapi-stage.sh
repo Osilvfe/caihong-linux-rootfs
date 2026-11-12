@@ -86,7 +86,6 @@ fi
 mkdir -p "$project_dir/build"
 work_dir=$(mktemp -d "$project_dir/build/caihong-vaapi-stage.XXXXXX") || exit 1
 source_copy="$work_dir/qcom-va-driver"
-build_dir="$work_dir/build"
 install_root="$work_dir/root"
 
 cleanup()
