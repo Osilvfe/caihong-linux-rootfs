@@ -98,6 +98,31 @@ class PlatformInstallerTests(unittest.TestCase):
         self.assertFalse((self.root / (self.configuration + '.caihong-new')).exists())
         self.assertFalse(self.pending.exists())
 
+    def prepare_display_manager_migration(self):
+        self.write(self.payload, 'usr/share/caihong-package/package',
+                   'caihong-platform\n')
+        migration = 'usr/libexec/caihong-platform/switch-display-manager'
+        self.write(self.payload, migration,
+                   '#!/bin/sh\n'
+                   'printf "%s\\n" "$CAIHONG_PLATFORM_UPDATE_INSTALL" '
+                   '> "$CAIHONG_DM_TEST_LOG"\n')
+        (self.payload / migration).chmod(0o755)
+        log = self.work / 'migration.log'
+        self.environment['CAIHONG_DM_TEST_LOG'] = str(log)
+        self.environment['CAIHONG_PLATFORM_SKIP_DISPLAY_MANAGER'] = '0'
+        return log
+
+    def test_update_runs_the_installed_display_manager_migration(self):
+        log = self.prepare_display_manager_migration()
+        self.install()
+        self.assertEqual(log.read_text(), '1\n')
+
+    def test_image_build_does_not_run_display_manager_migration(self):
+        log = self.prepare_display_manager_migration()
+        self.environment['CAIHONG_PLATFORM_IMAGE_BUILD'] = '1'
+        self.install()
+        self.assertFalse(log.exists())
+
     def test_existing_service_enablement_is_preserved(self):
         existing = self.root / self.link
         existing.parent.mkdir(parents=True)
