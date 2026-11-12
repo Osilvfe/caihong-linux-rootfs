@@ -56,7 +56,9 @@ verify_platform()
 		usr/share/caihong-package/package \
 		usr/share/caihong-package/version \
 		usr/share/libcamera/ipa/simple/sc1320cs.yaml \
-		usr/share/libcamera/ipa/simple/sc820cs.yaml; do
+		usr/share/libcamera/ipa/simple/sc820cs.yaml \
+		usr/lib/qt6/plugins/powerdevil/action/powerdevil_keyboardbrightnesscontrolaction.so \
+		usr/lib64/qt6/plugins/powerdevil/action/powerdevil_keyboardbrightnesscontrolaction.so; do
 		grep -Fqx "$path" <<<"$removals" || \
 			fail "$archive does not remove superseded path: $path"
 	done

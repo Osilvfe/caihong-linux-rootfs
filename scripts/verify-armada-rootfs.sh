@@ -94,8 +94,6 @@ required_paths=(
 	usr/local/sbin/caihong-pen-charge
 	usr/local/sbin/caihong-adbd-gadget
 	usr/local/sbin/caihong-adbd-run
-	usr/lib/linux-caihong/Image
-	usr/lib/linux-caihong/caihong.dtb
 	usr/lib/linux-caihong/boot-linux.img
 	usr/lib/linux-caihong/boot-userdata.img
 	usr/lib/linux-caihong/kernel-release

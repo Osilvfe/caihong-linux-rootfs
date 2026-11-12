@@ -65,6 +65,10 @@ resolve_input()
 platform_package=$(resolve_input "$platform_package" platform package)
 npu_package=$(resolve_input "$npu_package" NPU package)
 kernel_rpm=$(resolve_input "$kernel_rpm" kernel RPM)
+if [[ -z $kernel_rpm && -f $release_dir/LINUX_CAIHONG_RPM ]]; then
+	kernel_rpm=$(resolve_input "$release_dir/$(<"$release_dir/LINUX_CAIHONG_RPM")" kernel RPM)
+fi
+[[ -n $kernel_rpm ]] || fail "a linux-caihong RPM is required to build the device rootfs"
 [[ -n $platform_package ]] || \
 	[[ -f $platform_pointer ]] || fail "missing Armada platform package pointer"
 [[ -n $platform_package ]] || platform_package=$release_dir/$(<"$platform_pointer")
@@ -85,13 +89,6 @@ npu_libdir=$(bsdtar -xOf "$npu_package" usr/share/caihong-npu/libdir)
 kernel_release=$(<"$release_dir/KERNEL_RELEASE")
 [[ -d $module_tree/lib/modules/$kernel_release ]] || \
 	fail "module tree does not contain $kernel_release"
-image_file="$release_dir/Image-$kernel_release"
-dtb_file="$release_dir/sm8650-oneplus-caihong-$kernel_release.dtb"
-boot_linux="$release_dir/caihong-boot-linux-$kernel_release.img"
-boot_userdata="$release_dir/caihong-boot-userdata-$kernel_release.img"
-for input in "$image_file" "$dtb_file" "$boot_linux" "$boot_userdata"; do
-	[[ -f $input ]] || fail "missing kernel release input: $input"
-done
 
 mkdir -p "$project_dir/build" "$(dirname -- "$output")"
 work_dir=$(mktemp -d "$project_dir/build/armada-rootfs.XXXXXX")
@@ -161,11 +158,7 @@ fi
 # board utilities.  It is installed later through the same package used for
 # incremental updates; do not copy rootfs/archlinuxarm or rootfs/armada here.
 
-echo "installing matching Caihong kernel modules"
 rm -rf -- "$rootfs/usr/lib/modules"
-CAIHONG_EXPECTED_RELEASE="$kernel_release" \
-	"$project_dir/scripts/install-caihong-modules.sh" "$module_tree" "$rootfs"
-rm -f -- "$rootfs/usr/local/lib/caihong/caihong_pen_power.ko"
 
 echo "installing packaged Caihong update payloads"
 install -d -m 0755 "$rootfs/tmp/caihong-packages"
@@ -184,65 +177,21 @@ if [[ -n $npu_package ]]; then
 		"$rootfs/tmp/caihong-packages/${npu_package##*/}"
 fi
 
-if [[ -n $kernel_rpm ]]; then
-	install -m 0644 "$kernel_rpm" "$rootfs/tmp/linux-caihong.rpm"
-	chroot "$rootfs" /usr/bin/env -i \
-		HOME=/root LANG=C PATH=/usr/sbin:/usr/bin:/sbin:/bin \
-		/usr/bin/dnf5 -y --disablerepo='*' install /tmp/linux-caihong.rpm
-	chroot "$rootfs" rpm -q linux-caihong >/dev/null || \
-		fail "linux-caihong RPM was not registered"
-	rm -f -- "$rootfs/tmp/linux-caihong.rpm"
-fi
+install -m 0644 "$kernel_rpm" "$rootfs/tmp/linux-caihong.rpm"
+chroot "$rootfs" /usr/bin/env -i \
+	HOME=/root LANG=C PATH=/usr/sbin:/usr/bin:/sbin:/bin CAIHONG_SKIP_BOOT_FLASH=1 \
+	/usr/bin/dnf5 -y --disablerepo='*' install /tmp/linux-caihong.rpm
+chroot "$rootfs" rpm -q linux-caihong >/dev/null || \
+	fail "linux-caihong RPM was not registered"
+[[ $(<"$rootfs/usr/lib/linux-caihong/kernel-release") == "$kernel_release" ]] || \
+	fail "installed linux-caihong RPM does not match $kernel_release"
+[[ -d $rootfs/usr/lib/modules/$kernel_release ]] || \
+	fail "linux-caihong RPM did not activate the matching modules"
+rm -f -- "$rootfs/tmp/linux-caihong.rpm"
 rm -rf -- "$rootfs/tmp/caihong-packages"
 
 # The platform package already provided firmware, audio topology, services and
 # the device overlay.  Re-copying them here would create a second producer.
-
-# The regular image uses the Arch Linux ARM account. Armada owns its account
-# and home layout, so adjust only the three Caihong KDE integration files after
-# the platform payload has installed them.
-python3 - "$rootfs" <<'PY'
-from pathlib import Path
-import sys
-
-root = Path(sys.argv[1])
-files = (
-    root / "etc/systemd/system/caihong-clean-pogo-kde.service",
-    root / "usr/local/sbin/caihong-clean-pogo-kde",
-    root / "usr/local/sbin/caihong-fix-kwin-brightness",
-)
-replacements = (
-    ("/home/alarm", "/var/home/armada"),
-    ("machine=alarm@", "machine=armada@"),
-    ("-o alarm -g alarm", "-o armada -g armada"),
-    ("chown alarm:alarm", "chown armada:armada"),
-)
-for path in files:
-    text = path.read_text()
-    for old, new in replacements:
-        text = text.replace(old, new)
-    if "/home/alarm" in text or "machine=alarm@" in text:
-        raise SystemExit(f"unadapted Arch Linux ARM account reference: {path}")
-    path.write_text(text)
-PY
-
-# Fedora installs resize2fs in sbin while Arch installs it in bin.
-grow_unit="$rootfs/etc/systemd/system/caihong-grow-rootfs.service"
-if [[ -x $rootfs/usr/sbin/resize2fs ]]; then
-	sed -i 's#/usr/bin/resize2fs#/usr/sbin/resize2fs#' "$grow_unit"
-elif [[ ! -x $rootfs/usr/bin/resize2fs ]]; then
-	fail "Armada image does not contain resize2fs"
-fi
-
-echo "installing Caihong boot payload metadata"
-install -d -m 0755 "$rootfs/usr/lib/linux-caihong"
-install -m 0644 "$image_file" "$rootfs/usr/lib/linux-caihong/Image"
-install -m 0644 "$dtb_file" "$rootfs/usr/lib/linux-caihong/caihong.dtb"
-install -m 0644 "$boot_linux" "$rootfs/usr/lib/linux-caihong/boot-linux.img"
-install -m 0644 "$boot_userdata" "$rootfs/usr/lib/linux-caihong/boot-userdata.img"
-install -m 0755 "$project_dir/packaging/linux-caihong/install-current-slot" \
-	"$rootfs/usr/lib/linux-caihong/install-current-slot"
-printf '%s\n' "$kernel_release" > "$rootfs/usr/lib/linux-caihong/kernel-release"
 
 printf 'caihong\n' > "$rootfs/etc/hostname"
 printf 'LANG=en_US.UTF-8\n' > "$rootfs/etc/locale.conf"
@@ -262,7 +211,7 @@ enable_unit()
 	fi
 }
 
-for unit in NetworkManager.service bluetooth.service \
+for unit in NetworkManager.service bluetooth.service power-profiles-daemon.service \
 	caihong-adbd.service \
 	caihong-grow-rootfs.service caihong-fix-kwin-brightness.service \
 	caihong-clean-pogo-kde.service caihong-keyboard.service caihong-bluetooth-autostart.service \

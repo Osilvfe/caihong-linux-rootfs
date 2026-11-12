@@ -155,6 +155,8 @@ usr/share/caihong-package/package
 usr/share/caihong-package/version
 usr/share/libcamera/ipa/simple/sc1320cs.yaml
 usr/share/libcamera/ipa/simple/sc820cs.yaml
+usr/lib/qt6/plugins/powerdevil/action/powerdevil_keyboardbrightnesscontrolaction.so
+usr/lib64/qt6/plugins/powerdevil/action/powerdevil_keyboardbrightnesscontrolaction.so
 EOF
 : > "$manifest"
 while IFS= read -r file; do

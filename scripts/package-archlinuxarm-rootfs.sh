@@ -524,12 +524,6 @@ done
 # device services.  It is installed below through the same package used for
 # incremental updates; do not reintroduce a direct overlay here.
 
-# The Pogo keyboard has no backlight.  Remove the generic PowerDevil action so
-# Plasma cannot present a non-functional keyboard-brightness control even if
-# an old user shortcut file or a package update leaves the plugin enabled.
-rm -f -- \
-	"$rootfs/usr/lib/qt6/plugins/powerdevil/action/powerdevil_keyboardbrightnesscontrolaction.so"
-
 echo "configuring the English (United States) locale and Asia/Shanghai timezone"
 sed -i 's/^#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' "$rootfs/etc/locale.gen"
 if ! grep -qx 'en_US.UTF-8 UTF-8' "$rootfs/etc/locale.gen"; then
