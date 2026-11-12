@@ -52,6 +52,7 @@ verify_platform()
 	grep -Fqx remove <<<"$listing" || fail "$archive has no removal manifest"
 	removals=$(bsdtar -xOf "$archive" remove)
 	for path in \
+		etc/alsa/state-daemon.conf \
 		usr/share/caihong-package/architecture \
 		usr/share/caihong-package/package \
 		usr/share/caihong-package/version \

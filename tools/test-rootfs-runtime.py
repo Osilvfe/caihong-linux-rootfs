@@ -55,6 +55,10 @@ class PlatformInstallerTests(unittest.TestCase):
         paths = sorted(path for directory in ('usr', 'etc')
                        for path in (self.payload / directory).rglob('*')
                        if path.is_symlink() or path.is_file())
+        entries = ['manifest', 'usr', 'etc']
+        if (self.payload / 'remove').is_file():
+            paths.append(self.payload / 'remove')
+            entries.append('remove')
         lines = []
         for path in paths:
             contents = (str(path.readlink()) + '\n').encode() if path.is_symlink() else path.read_bytes()
@@ -62,7 +66,7 @@ class PlatformInstallerTests(unittest.TestCase):
         (self.payload / 'manifest').write_text('\n'.join(lines) + '\n')
         archive = self.work / 'package.tar'
         subprocess.run(['bsdtar', '-cf', str(archive), '-C', str(self.payload),
-                        'manifest', 'usr', 'etc'], check=True, capture_output=True)
+                        *entries], check=True, capture_output=True)
         return archive
 
     def run_installer(self, *arguments):
@@ -97,6 +101,24 @@ class PlatformInstallerTests(unittest.TestCase):
                          'candidate configuration\n')
         self.assertFalse((self.root / (self.configuration + '.caihong-new')).exists())
         self.assertFalse(self.pending.exists())
+
+    def test_platform_removes_stock_alsa_state_daemon_and_can_restore_it(self):
+        builder = (PROJECT / 'scripts/build-caihong-platform-package.sh').read_text()
+        removals = re.search(r"cat > \"\$stage/remove\" <<'EOF'\n(.*?)\nEOF",
+                             builder, re.DOTALL)
+        self.assertIsNotNone(removals)
+        self.write(self.payload, 'remove', removals.group(1) + '\n')
+        configuration = 'etc/alsa/state-daemon.conf'
+        for image_build in ('0', '1'):
+            with self.subTest(image_build=image_build):
+                self.environment['CAIHONG_PLATFORM_IMAGE_BUILD'] = image_build
+                self.write(self.root, configuration, 'stock state daemon\n')
+                self.install()
+                self.assertFalse((self.root / configuration).exists())
+                result = self.run_installer('--rollback', 'caihong-test')
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertEqual((self.root / configuration).read_text(),
+                                 'stock state daemon\n')
 
     def prepare_display_manager_migration(self):
         self.write(self.payload, 'usr/share/caihong-package/package',

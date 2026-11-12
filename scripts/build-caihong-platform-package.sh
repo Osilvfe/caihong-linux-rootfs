@@ -84,8 +84,7 @@ if [ "$distribution" = armada ]; then
 	sed -i 's#/usr/bin/resize2fs#/usr/sbin/resize2fs#g' \
 		"$stage/etc/systemd/system/caihong-grow-rootfs.service"
 	# Armada has its own account layout and does not use the Arch alarm user.
-	rm -f -- "$stage/etc/sudoers.d/10-alarm" \
-		"$stage/etc/alsa/state-daemon.conf"
+	rm -f -- "$stage/etc/sudoers.d/10-alarm"
 fi
 
 if [ "$distribution" = archlinuxarm ] || [ "$distribution" = armada ]; then
@@ -150,6 +149,7 @@ printf '%s\n' "libdir=$libdir" \
 
 manifest="$stage/manifest"
 cat > "$stage/remove" <<'EOF'
+etc/alsa/state-daemon.conf
 usr/share/caihong-package/architecture
 usr/share/caihong-package/package
 usr/share/caihong-package/version
