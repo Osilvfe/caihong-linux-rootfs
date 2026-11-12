@@ -68,6 +68,10 @@ verify_platform()
 		fi
 	done
 	if [[ $distribution == archlinuxarm ]]; then
+		grep -Fqx usr/libexec/caihong-platform/switch-display-manager <<<"$listing" || \
+			fail "$archive is missing the display-manager migration helper"
+	fi
+	if [[ $distribution == archlinuxarm ]]; then
 		for path in \
 			usr/bin/caihong-toolbox \
 			usr/lib/caihong-toolbox/caihong-toolbox-service \

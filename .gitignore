@@ -10,6 +10,7 @@
 /external/qcom-va-driver/
 /external/qbootctl/
 /external/mkbootimg/
+/external/power-profiles-daemon/
 *.part
 *.tmp
 __pycache__/

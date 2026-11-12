@@ -18,9 +18,9 @@ marker=$state_dir/kwin-brightness-v1
 curve='[0.0, 8.96, 30.8, 71.4, 512.0, 952.5, 1304.0, 1651.5, 1867.3333333333333, 7030.0, 40000.0]'
 
 # KWin creates this file only after the first Plasma session has started.  Seed
-# a minimal connector-only configuration before SDDM so automatic brightness
-# is active in that first session.  KWin fills in the mode, scale and generated
-# output UUID when it loads the file.
+# a minimal connector-only configuration before the display manager so automatic
+# brightness is active in that first session.  KWin fills in the mode, scale and
+# generated output UUID when it loads the file.
 if [ ! -f "$config" ]; then
 	install -d -o alarm -g alarm -m 0700 "${config%/*}"
 	cat > "$config" <<'EOF'

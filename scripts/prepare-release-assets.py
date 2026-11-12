@@ -213,7 +213,8 @@ sudo /usr/libexec/caihong-platform/install-caihong-platform \\
   {npu_package.name}
 ```"""
     source_lines = []
-    for component in ("LINUX", "LIBCAMERA", "PLASMA_CAMERA", "QBOOTCTL", "MKBOOTIMG"):
+    for component in ("LINUX", "LIBCAMERA", "PLASMA_CAMERA", "QBOOTCTL", "MKBOOTIMG",
+                      "POWER_PROFILES_DAEMON"):
         repository = dependencies.get(f"{component}_REPOSITORY")
         reference = dependencies.get(f"{component}_REF")
         commit = dependencies.get(f"{component}_COMMIT")

@@ -73,6 +73,9 @@ checkout QCOM_VA "$QCOM_VA_REF" \
 if [ "$dependency_scope" = release ]; then
 	checkout QBOOTCTL "$QBOOTCTL_REF" \
 		"$project_dir/external/qbootctl" "$QBOOTCTL_REPOSITORY"
+	checkout POWER_PROFILES_DAEMON "$POWER_PROFILES_DAEMON_REF" \
+		"$project_dir/external/power-profiles-daemon" \
+		"$POWER_PROFILES_DAEMON_REPOSITORY"
 fi
 checkout MKBOOTIMG "$MKBOOTIMG_REF" \
 	"$project_dir/external/mkbootimg" "$MKBOOTIMG_REPOSITORY"
