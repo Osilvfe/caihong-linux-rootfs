@@ -202,7 +202,7 @@ trap - HUP INT TERM
 # Existing Arch Linux ARM installations may still run SDDM.  The package
 # carries PLM, but pacman does not enable it and does not remove SDDM by
 # itself, so perform that migration explicitly after the payload is in place.
-if [ "$image_build" = 0 ] && [ "$component" = caihong-platform ] && \
+if [ "$component" = caihong-platform ] && \
 	[ -x "$payload/usr/libexec/caihong-platform/switch-display-manager" ]; then
 	CAIHONG_PLATFORM_ROOT="$target_root" \
 	CAIHONG_PLATFORM_SKIP_DISPLAY_MANAGER="${CAIHONG_PLATFORM_SKIP_DISPLAY_MANAGER:-0}" \
