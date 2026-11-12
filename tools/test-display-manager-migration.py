@@ -151,6 +151,22 @@ class DisplayManagerMigrationTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertFalse(self.log.exists())
 
+    def test_administrator_selected_display_manager_is_preserved(self):
+        pacman = self.root / 'usr/bin/pacman'
+        pacman.parent.mkdir(parents=True)
+        pacman.write_text('#!/bin/sh\nexec fake-pacman "$@"\n')
+        pacman.chmod(0o755)
+        (self.work / 'sddm-installed').touch()
+        alias = self.root / 'etc/systemd/system/display-manager.service'
+        alias.parent.mkdir(parents=True)
+        alias.symlink_to('/usr/lib/systemd/system/ly.service')
+
+        result = self.run_script()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(alias.readlink(), Path('/usr/lib/systemd/system/ly.service'))
+        self.assertTrue((self.work / 'sddm-installed').exists())
+        self.assertFalse(self.log.exists())
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -46,6 +46,23 @@ run_systemctl()
 	fi
 }
 
+alias=$root/etc/systemd/system/display-manager.service
+
+# Never override a display manager that the administrator selected.  Only the
+# stock SDDM selection, an empty selection, or an existing PLM selection is
+# migrated automatically.  This runs on update-package installation only; the
+# image builder installs and enables PLM directly.
+if [ -L "$alias" ]; then
+	target=$(readlink -- "$alias")
+	case $target in
+		*/sddm.service|*/plasmalogin.service) ;;
+		*)
+			echo "keeping administrator-selected display manager: $target" >&2
+			exit 0
+			;;
+	esac
+fi
+
 if ! run_in_target pacman -Qq plasma-login-manager >/dev/null 2>&1; then
 	echo "installing plasma-login-manager" >&2
 	run_in_target pacman -S --needed --noconfirm --disable-sandbox \
@@ -59,8 +76,8 @@ fi
 
 # SDDM and PLM share the display-manager.service alias.  Remove the stale
 # alias before enabling PLM; systemctl will not replace an existing alias.
-if [ -L "$root/etc/systemd/system/display-manager.service" ]; then
-	rm -f -- "$root/etc/systemd/system/display-manager.service"
+if [ -L "$alias" ]; then
+	rm -f -- "$alias"
 fi
 run_systemctl enable plasmalogin.service >/dev/null
 
