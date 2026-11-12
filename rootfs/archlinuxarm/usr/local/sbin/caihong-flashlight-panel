@@ -1,0 +1,183 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-2.0-only
+"""Add the Caihong flashlight applet to the Plasma panel.
+
+The applet ships system-wide, but Plasma does not put new widgets on an
+existing panel by itself.  This helper runs once per login from
+/etc/xdg/autostart/caihong-flashlight-panel.desktop, waits for plasmashell and
+appends the applet to the bottom panel.
+
+A marker in ~/.config records that the attempt was made, so a user who removes
+the applet later does not get it back on every login.  Pass --force to add it
+again anyway.
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+APPLET_ID = "org.ahaan.flashlight"
+DBUS_DEST = "org.kde.plasmashell"
+DBUS_PATH = "/PlasmaShell"
+DBUS_METHOD = "org.kde.PlasmaShell.evaluateScript"
+ATTEMPTS = 30
+INTERVAL = 1.0
+
+CONFIG = Path.home() / ".config/plasma-org.kde.plasma.desktop-appletsrc"
+MARKER = Path.home() / ".config/caihong-flashlight-panel"
+
+ADD_SCRIPT = f"""
+var p = panels();
+if (p.length === 0) {{
+    print("no-panel");
+}} else {{
+    var target = p[0];
+    for (var i = 0; i < p.length; i++) {{
+        if (String(p[i].location) === "bottom" || p[i].location === 4) {{
+            target = p[i];
+            break;
+        }}
+    }}
+    target.addWidget("{APPLET_ID}");
+    print("added");
+}}
+"""
+
+
+def applet_present(config=None):
+    """Return True when the panel configuration already lists the applet."""
+    config = CONFIG if config is None else config
+    try:
+        text = config.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return False
+    return any(line.strip() == f"plugin={APPLET_ID}" for line in text.splitlines())
+
+
+def write_marker(marker=None):
+    marker = MARKER if marker is None else marker
+    try:
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.touch()
+    except OSError:
+        pass
+
+
+def find_runner():
+    """Find a command that can call plasmashell's scripting D-Bus interface."""
+    for name in ("gdbus", "qdbus6", "qdbus-qt6", "qdbus"):
+        path = shutil.which(name)
+        if path:
+            return path
+    return None
+
+
+def runner_command(runner, script):
+    if os.path.basename(runner).startswith("gdbus"):
+        return [
+            runner,
+            "call",
+            "--session",
+            "--dest",
+            DBUS_DEST,
+            "--object-path",
+            DBUS_PATH,
+            "--method",
+            DBUS_METHOD,
+            script,
+        ]
+    return [runner, DBUS_DEST, DBUS_PATH, DBUS_METHOD, script]
+
+
+def run_script(runner, script):
+    try:
+        return subprocess.run(
+            runner_command(runner, script),
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
+def add_applet(runner, attempts=None, interval=None):
+    """Ask plasmashell to append the applet, retrying until the panel exists."""
+    attempts = ATTEMPTS if attempts is None else attempts
+    interval = INTERVAL if interval is None else interval
+    for _ in range(attempts):
+        result = run_script(runner, ADD_SCRIPT)
+        if result is not None and result.returncode == 0 and "added" in result.stdout:
+            return True
+        time.sleep(interval)
+    return False
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Add the Caihong flashlight applet to the Plasma panel."
+    )
+    parser.add_argument(
+        "--status",
+        action="store_true",
+        help="report whether the applet is in the panel and exit",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print what would happen without touching plasmashell",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="add the applet even if a previous attempt was recorded",
+    )
+    args = parser.parse_args(argv)
+
+    present = applet_present()
+    if args.status:
+        print("present" if present else "missing")
+        return 0 if present else 1
+
+    if present:
+        write_marker()
+        print("flashlight applet already in the panel")
+        return 0
+
+    if MARKER.exists() and not args.force:
+        print("flashlight applet was removed; not adding it again")
+        return 0
+
+    if args.dry_run:
+        print(f"would add {APPLET_ID} to the Plasma panel")
+        return 0
+
+    runner = find_runner()
+    if runner is None:
+        print(
+            "no gdbus or qdbus found; cannot add the flashlight applet",
+            file=sys.stderr,
+        )
+        return 1
+
+    if not add_applet(runner):
+        print(
+            "plasmashell did not accept the flashlight applet; it will be "
+            "retried on the next login",
+            file=sys.stderr,
+        )
+        return 1
+
+    write_marker()
+    print("added the flashlight applet to the panel")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

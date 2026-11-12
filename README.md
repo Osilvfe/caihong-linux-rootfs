@@ -242,6 +242,7 @@ Commands that change hardware or boot state require root privileges.
 | --- | --- |
 | `caihong-slot` | Inspect or switch A/B slots: `sudo caihong-slot status`, `sudo caihong-slot android --reboot`. |
 | `caihong-flashlight` | Control the rear torch: `sudo caihong-flashlight on 40`, `status`, or `off`. |
+| `caihong-flashlight-panel` | Adds the Flashlight applet to the Plasma panel on first login. `--status` reports whether it is present and `--force` adds it again after it was removed. |
 | `caihong-hotspot` | Run the concurrent Wi-Fi AP without disconnecting the STA: `sudo caihong-hotspot start`; also provides `status`, `stop`, and `regulatory {show\|set CODE\|reset}`. Configure it in `/etc/caihong-hotspot.conf`. |
 | `caihong-hardware-mac` | Applies WLAN and Bluetooth addresses at boot, preferring explicit configuration or authenticated factory NVRAM and using persistent fallback addresses if NVRAM cannot be read. |
 | `caihong-npu-info` | `sudo caihong-npu-info` reports CDSP firmware state and FastRPC capabilities. `--self-test` verifies generic v75 DSP execution; `--htp-self-test` verifies a float QAIRT/QNN graph; `--htp-conv-self-test` verifies quantized Conv2d against a CPU reference. |
@@ -257,6 +258,12 @@ Commands that change hardware or boot state require root privileges.
 | `caihong-nvram-mac` | Internal `/usr/local/libexec` reader used by `caihong-hardware-mac`. |
 | `caihong-switch-to-android.desktop` | Plasma application-menu entry that runs `caihong-slot android --reboot` through polkit. |
 | `caihong-toolbox` | Opens the Caihong graphical settings tool from the application menu. Hardware changes go through its D-Bus/Polkit backend; the backend is not enabled as a boot service. |
+
+The Plasma panel gets a **Flashlight** applet on first login: a switch and an
+intensity slider for the rear torch. The applet is installed system-wide, so it
+is also available under **Add Widgets**. Each user gets it once; if you remove
+it, later logins leave it removed. Add it again with
+`caihong-flashlight-panel --force` or from Add Widgets.
 
 The rootfs also includes the Caihong SSC service, custom libcamera stack,
 Plasma Camera integration, Caihong Toolbox, firmware, audio topology and

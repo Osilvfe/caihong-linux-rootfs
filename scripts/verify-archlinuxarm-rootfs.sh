@@ -18,6 +18,7 @@ etc/bluetooth/main.conf
 etc/locale.conf
 etc/xdg/bluedevilglobalrc
 etc/caihong-autocharge.json
+etc/xdg/autostart/caihong-flashlight-panel.desktop
 etc/caihong-hotspot.conf
 etc/caihong-pen.json
 etc/modules-load.d/caihong.conf
@@ -87,6 +88,7 @@ usr/local/sbin/caihong-adbd-gadget
 usr/local/sbin/caihong-adbd-run
 usr/local/sbin/caihong-hotspot
 usr/local/sbin/caihong-flashlight
+usr/local/sbin/caihong-flashlight-panel
 usr/local/sbin/caihong-fix-kwin-brightness
 usr/local/sbin/caihong-clean-pogo-kde
 usr/local/sbin/caihong-mark-boot-successful
@@ -97,6 +99,8 @@ usr/local/sbin/caihong-slot
 usr/local/sbin/caihong-autocharge
 usr/local/sbin/qbootctl
 usr/share/applications/caihong-switch-to-android.desktop
+usr/share/plasma/plasmoids/org.ahaan.flashlight/metadata.json
+usr/share/plasma/plasmoids/org.ahaan.flashlight/contents/ui/main.qml
 usr/lib/linux-caihong/boot-linux.img
 usr/lib/linux-caihong/boot-userdata.img
 usr/lib/linux-caihong/install-current-slot

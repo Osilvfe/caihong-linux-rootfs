@@ -25,6 +25,7 @@ jobs:
           python3 tools/test-rootfs-runtime.py
           python3 tools/test-hardware-mac.py
           python3 tools/test-caihong-autocharge.py
+          python3 tools/test-caihong-flashlight-panel.py
           node --test tools/test-release-artifacts.mjs
           shellcheck -x \
             scripts/build-boot-v2.sh \
@@ -51,6 +52,7 @@ jobs:
             rootfs/archlinuxarm/usr/local/sbin/caihong-slot \
             scripts/ssc/install-rootfs.sh
           desktop-file-validate \
+            rootfs/archlinuxarm/etc/xdg/autostart/caihong-flashlight-panel.desktop \
             rootfs/archlinuxarm/usr/share/applications/caihong-switch-to-android.desktop
       - name: Reject oversized repository objects
         run: |
