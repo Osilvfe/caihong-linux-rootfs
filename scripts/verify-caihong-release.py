@@ -48,7 +48,16 @@ REQUIRED_MODULES = (
     "qcom_camera_icp",
     "qcom-camera-icp-bps",
 )
-REQUIRED_MODULES_OR_BUILTIN = ("msm",)
+# USB audio is what makes USB-C headsets enumerate as an ALSA card.  It used to
+# be dropped from the package by a hand-maintained module list, so keep it in
+# the release gate where either a module or a built-in driver is acceptable.
+REQUIRED_MODULES_OR_BUILTIN = (
+    "msm",
+    "snd-usb-audio",
+    "snd-usbmidi-lib",
+    "snd-rawmidi",
+    "snd-hwdep",
+)
 EARLY_FIRMWARE = (
     "qcom/gen70900_sqe.fw",
     "qcom/gmu_gen70900.bin",
