@@ -102,6 +102,7 @@ required_paths=(
 	usr/local/libexec/caihong-ssc/iio-sensor-proxy
 	usr/local/lib/caihong-ssc/libhexagonrpc.so.0.5
 	usr/local/lib/caihong-ssc/libssc.so.2
+	var/lib/caihong-ssc/root/sensors/sns_reg.conf
 	usr/lib/systemd/system/iio-sensor-proxy.service.d/caihong-ssc.conf
 	usr/lib/tmpfiles.d/caihong-alsa.conf
 	usr/lib/udev/rules.d/99-caihong-flashlight.rules

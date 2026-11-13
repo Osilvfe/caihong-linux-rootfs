@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install validation tools
-        run: sudo apt-get update && sudo apt-get install -y desktop-file-utils libarchive-tools shellcheck
+        run: sudo apt-get update && sudo apt-get install -y desktop-file-utils libarchive-tools shellcheck zstd
       - name: Validate scripts
         run: |
           set -euo pipefail
@@ -24,6 +24,7 @@ jobs:
           python3 -m compileall -q scripts
           python3 tools/test-rootfs-camera-policy.py
           python3 tools/test-platform-payload.py
+          python3 tools/test-platform-ssc-package.py
           python3 tools/test-build-root-resolver.py
           python3 tools/test-adbd-serial.py
           python3 tools/test-rootfs-runtime.py

@@ -102,6 +102,58 @@ class PlatformInstallerTests(unittest.TestCase):
         self.assertFalse((self.root / (self.configuration + '.caihong-new')).exists())
         self.assertFalse(self.pending.exists())
 
+    def test_image_install_provides_ssc_sensor_defaults(self):
+        registry = 'var/lib/caihong-ssc/root/sensors/sns_reg.conf'
+        seed = 'usr/share/caihong-ssc/root/sensors/sns_reg.conf'
+        self.write(self.payload, seed, 'packaged sensor configuration\n')
+        self.environment['CAIHONG_PLATFORM_IMAGE_BUILD'] = '1'
+        self.install()
+        self.assertEqual((self.root / registry).read_text(),
+                         'packaged sensor configuration\n')
+        self.assertEqual((self.root / seed).read_text(),
+                         'packaged sensor configuration\n')
+
+    def test_update_preserves_existing_ssc_state_and_adds_missing_defaults(self):
+        registry = 'var/lib/caihong-ssc/root/sensors/sns_reg.conf'
+        state = 'var/lib/caihong-ssc/root/registry/calibration'
+        self.write(self.root, registry, 'existing sensor configuration\n')
+        self.write(self.root, state, 'device calibration\n')
+        self.write(self.payload, 'usr/share/caihong-ssc/root/sensors/sns_reg.conf',
+                   'packaged sensor configuration\n')
+        self.write(self.payload, 'usr/share/caihong-ssc/root/registry/calibration',
+                   'initial calibration\n')
+        additional = 'var/lib/caihong-ssc/root/sensors/additional.conf'
+        self.write(self.payload, 'usr/share/caihong-ssc/root/sensors/additional.conf',
+                   'additional sensor configuration\n')
+        self.install()
+        self.assertEqual((self.root / registry).read_text(),
+                         'existing sensor configuration\n')
+        self.assertEqual((self.root / state).read_text(), 'device calibration\n')
+        self.assertEqual((self.root / additional).read_text(),
+                         'additional sensor configuration\n')
+        result = self.run_installer('--rollback', 'caihong-test')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual((self.root / registry).read_text(),
+                         'existing sensor configuration\n')
+        self.assertEqual((self.root / state).read_text(), 'device calibration\n')
+        self.assertFalse((self.root / additional).exists())
+
+    def test_corrupt_ssc_payload_fails_before_changing_the_rootfs(self):
+        registry = 'var/lib/caihong-ssc/root/sensors/sns_reg.conf'
+        seed = 'usr/share/caihong-ssc/root/sensors/sns_reg.conf'
+        self.write(self.payload, seed, 'packaged sensor configuration\n')
+        self.package()
+        self.write(self.payload, seed, 'corrupt sensor configuration\n')
+        archive = self.work / 'corrupt.tar'
+        subprocess.run(['bsdtar', '-cf', str(archive), '-C', str(self.payload),
+                        'manifest', 'usr', 'etc'],
+                       check=True, capture_output=True)
+        result = self.run_installer(archive)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('checksum mismatch:', result.stderr)
+        self.assertFalse((self.root / registry).exists())
+        self.assertEqual((self.root / self.program).read_text(), 'original program\n')
+
     def test_platform_removes_stock_alsa_state_daemon_and_can_restore_it(self):
         builder = (PROJECT / 'scripts/build-caihong-platform-package.sh').read_text()
         removals = re.search(r"cat > \"\$stage/remove\" <<'EOF'\n(.*?)\nEOF",

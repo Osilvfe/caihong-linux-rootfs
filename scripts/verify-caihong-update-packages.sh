@@ -49,6 +49,8 @@ verify_platform()
 	[[ $(bsdtar -xOf "$archive" usr/share/caihong-platform/distribution) == "$distribution" ]] || \
 		fail "$archive has incorrect distribution metadata"
 	listing=$(bsdtar -tf "$archive")
+	grep -Fqx usr/share/caihong-ssc/root/sensors/sns_reg.conf <<<"$listing" || \
+		fail "$archive is missing the SSC sensor configuration"
 	grep -Fqx remove <<<"$listing" || fail "$archive has no removal manifest"
 	removals=$(bsdtar -xOf "$archive" remove)
 	for path in \

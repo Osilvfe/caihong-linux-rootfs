@@ -187,6 +187,19 @@ while IFS= read -r entry; do
 				destination=$target_root/$path.caihong-new
 			fi
 			;;
+		usr/share/caihong-ssc/root/*)
+			ssc_state=$target_root/var/lib/caihong-ssc/root/${path#usr/share/caihong-ssc/root/}
+			if [ ! -e "$ssc_state" ] && [ ! -L "$ssc_state" ]; then
+				mkdir -p -- "$(dirname -- "$ssc_state")"
+				printf '%s no\n' "$ssc_state" >> "$installed"
+				if ! cp -a -- "$payload/$path" "$ssc_state"; then
+					rollback
+					cleanup
+					exit 1
+				fi
+			fi
+			destination=$target_root/$path
+			;;
 		*) destination=$target_root/$path ;;
 	esac
 	relative=${destination#"$target_root"/}

@@ -334,6 +334,10 @@ other `/etc` files use the `.caihong-new` suffix. Legacy candidates are left
 for manual cleanup. Run `install-caihong-platform --rollback <component>`
 to restore the previous files.
 
+SSC sensor defaults are included in the platform package. Installation fills
+missing files under `/var/lib/caihong-ssc/root` and preserves existing sensor
+configuration and calibration data.
+
 On Arch Linux ARM, installing a platform update also installs and enables
 Plasma Login Manager and removes SDDM. An administrator-selected alternative
 display manager is preserved. Fresh images enable PLM during image creation.

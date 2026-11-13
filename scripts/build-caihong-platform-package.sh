@@ -129,6 +129,8 @@ CAIHONG_ADBD_CACHE="$project_dir/downloads/caihong-adbd" \
 	"$project_dir/scripts/install-caihong-adbd.sh" "$stage" >/dev/null
 FORCE=1 "$project_dir/scripts/ssc/install-rootfs.sh" \
 	"$project_dir/firmware-assets/caihong-ssc" "$stage" >/dev/null
+install -d -m 0755 "$stage/usr/share/caihong-ssc"
+mv -- "$stage/var/lib/caihong-ssc/root" "$stage/usr/share/caihong-ssc/root"
 
 install -D -m 0755 \
 	"$project_dir/packaging/caihong-platform/install-caihong-platform" \

@@ -345,6 +345,9 @@ sudo /usr/libexec/caihong-platform/install-caihong-platform \
 `caihong-platform-armada-<version>.tar.zst`。如需恢复上一版文件，运行
 `install-caihong-platform --rollback <component>`。
 
+平台包包含 SSC 传感器默认数据，安装时补齐 `/var/lib/caihong-ssc/root` 下缺失的
+文件，并保留已有的传感器配置和校准数据。
+
 Arch Linux ARM 安装平台更新包时还会安装、启用 Plasma Login Manager 并移除
 SDDM；管理员已选择其他显示管理器时保留原选择。全新镜像在打包时启用 PLM。
 
