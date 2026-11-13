@@ -63,6 +63,8 @@ SOURCE
             firmware = project / 'firmware/qcom/sm8650/SM8650-MTP-tplg.bin'
             firmware.parent.mkdir(parents=True)
             firmware.write_bytes(b'topology')
+            for name in ('regulatory.db', 'regulatory.db.p7s'):
+                (project / 'firmware' / name).write_text('distribution owned\n')
             (project / 'firmware/SHA256SUMS').write_text(
                 hashlib.sha256(firmware.read_bytes()).hexdigest() +
                 '  qcom/sm8650/SM8650-MTP-tplg.bin\n')
@@ -99,6 +101,7 @@ SOURCE
                         self.assertIn('pkgname = caihong-platform\n', metadata)
                         self.assertIn('conflict = sddm\n', metadata)
                         self.assertIn('depend = plasma-login-manager\n', metadata)
+                        self.assertIn('depend = wireless-regdb\n', metadata)
                         self.assertTrue((root / '.INSTALL').is_file())
                     else:
                         self.assertTrue(archive.name.endswith('-1.aarch64.rpm'))
@@ -111,12 +114,22 @@ SOURCE
                             self.assertNotIn('libbase.so.0', dependencies)
                         self.assertIn('libc.so.6', subprocess.check_output(
                             ['rpm', '-qp', '--requires', str(archive)], text=True))
+                        self.assertIn('wireless-regdb', subprocess.check_output(
+                            ['rpm', '-qp', '--requires', str(archive)], text=True))
+                        self.assertIn('tuned-ppd', subprocess.check_output(
+                            ['rpm', '-qp', '--conflicts', str(archive)], text=True))
+                        self.assertIn('tuned-ppd', subprocess.check_output(
+                            ['rpm', '-qp', '--obsoletes', str(archive)], text=True))
+                        self.assertIn('ppd-service', subprocess.check_output(
+                            ['rpm', '-qp', '--provides', str(archive)], text=True))
                         with subprocess.Popen(['rpm2cpio', str(archive)], stdout=subprocess.PIPE) as source:
                             subprocess.run(['bsdtar', '-xf', '-', '-C', str(root)],
                                            stdin=source.stdout, check=True)
                             source.stdout.close()
                             self.assertEqual(source.wait(), 0)
                     self.assertFalse((root / 'etc').exists())
+                    for name in ('regulatory.db', 'regulatory.db.p7s'):
+                        self.assertFalse((root / 'usr/lib/firmware' / name).exists())
                     self.assertFalse((root / 'usr/libexec/caihong-platform/install-caihong-platform').exists())
                     self.assertEqual((root / f'usr/{libdir}/caihong-npu/qnn/libQnnHtp.so').read_text(), 'NPU runtime\n')
                     self.assertEqual((root / 'usr/share/caihong-npu/libdir').read_text(), libdir + '\n')

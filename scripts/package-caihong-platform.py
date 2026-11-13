@@ -30,7 +30,7 @@ def pacman_package(stage, output, version):
                     'libtiff', 'gnutls', 'gstreamer', 'gst-plugins-base',
                     'libqmi', 'libqrtr-glib', 'protobuf-c', 'e2fsprogs', 'libgudev',
                     'libunwind', 'hostapd', 'dnsmasq', 'nftables', 'iw', 'iproute2',
-                    'polkit', 'upower', 'plasma-login-manager']
+                    'polkit', 'upower', 'plasma-login-manager', 'wireless-regdb']
     reader = stage / 'usr/local/libexec/caihong-nvram-mac'
     dynamic = subprocess.run(['readelf', '-d', str(reader)], check=True,
                              capture_output=True, text=True).stdout
@@ -75,6 +75,7 @@ def rpm_package(stage, output, version):
                      'gstreamer1-plugin-libcamera', 'plasma-camera', 'power-profiles-daemon']
         metadata = '\n'.join(f'Provides: {name} = {COMPONENTS.get(name, "0.7.2")}'
                              for name in conflicts)
+        conflicts.append('tuned-ppd')
         metadata += '\n' + '\n'.join(f'Obsoletes: {name}' for name in conflicts)
         metadata += '\n' + '\n'.join(f'Conflicts: {name}' for name in conflicts)
         private_sonames = set()
@@ -110,8 +111,9 @@ URL: https://github.com/Osilvfe/caihong-linux-rootfs
 BuildArch: aarch64
 Requires: bash, coreutils, findutils, systemd, util-linux
 Requires: python3, python3-gobject, bluez, NetworkManager
-Requires: kmod, e2fsprogs, hostapd, dnsmasq, nftables, iw, iproute
+Requires: kmod, e2fsprogs, hostapd, dnsmasq, nftables, iw, iproute, wireless-regdb
 Provides: libcdsprpc.so()(64bit)
+Provides: ppd-service
 {metadata}
 %global _build_id_links none
 %global __os_install_post %{{nil}}
@@ -156,6 +158,8 @@ def main():
         raise ValueError('invalid platform version')
     if not (stage / 'usr/share/caihong-npu/VERSION').is_file():
         raise ValueError('the platform package must contain the NPU runtime')
+    for name in ('regulatory.db', 'regulatory.db.p7s'):
+        (stage / 'usr/lib/firmware' / name).unlink(missing_ok=True)
     assets = stage / 'usr/share/caihong-platform'
     assets.mkdir(parents=True, exist_ok=True)
     defaults = assets / 'defaults'
