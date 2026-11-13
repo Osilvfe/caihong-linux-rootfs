@@ -12,6 +12,7 @@ if [[ -z $target || ! -d $target ]]; then
 fi
 target=$(cd -- "$target" && pwd)
 failed=0
+rpm --root "$target" -q caihong-platform >/dev/null || failed=1
 
 missing()
 {

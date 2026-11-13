@@ -24,7 +24,7 @@ test('each release file is uploaded independently without ZIP wrapping', async c
   const {directory, calls, client} = await fixture(context);
   const names = [
     'caihong-boot-linux-test.img',
-    'caihong-platform-archlinuxarm-test.tar.zst',
+    'caihong-platform-test-1-aarch64.pkg.tar.zst',
     'caihong-rootfs-test.ext4.sparse.img.zst.part01',
     'caihong-rootfs-test.ext4.sparse.img.zst.part02',
   ];

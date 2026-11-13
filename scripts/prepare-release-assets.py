@@ -176,31 +176,22 @@ def write_release_notes(
         (asset for asset in assets if asset.name.startswith("caihong-platform-")),
         None,
     )
-    npu_package = next(
-        (asset for asset in assets if asset.name.startswith("caihong-npu-")),
-        None,
-    )
     pacman_package = next(
-        (asset for asset in assets if asset.name.endswith("-aarch64.pkg.tar.zst")),
+        (asset for asset in assets if asset.name.startswith("linux-caihong-") and asset.name.endswith("-aarch64.pkg.tar.zst")),
         None,
     )
     rpm_package = next(
-        (asset for asset in assets if asset.name.endswith("-1.aarch64.rpm")),
+        (asset for asset in assets if asset.name.startswith("linux-caihong-") and asset.name.endswith("-1.aarch64.rpm")),
         None,
     )
-    if not platform_package or not npu_package:
-        raise RuntimeError("release notes require platform and NPU packages")
+    if not platform_package:
+        raise RuntimeError("release notes require the native platform package including NPU")
     if distribution == "archlinuxarm":
         if not pacman_package:
             raise RuntimeError("Arch release notes require a pacman kernel package")
         update_instructions = f"""```sh
-bsdtar -xOf ./{platform_package.name} \\
-  usr/libexec/caihong-platform/install-caihong-platform > ./install-caihong-platform
-sudo sh ./install-caihong-platform \\
-  {platform_package.name}
-sudo pacman -U ./{pacman_package.name}
-sudo /usr/libexec/caihong-platform/install-caihong-platform \\
-  {npu_package.name}
+sudo pacman -Syu && sudo pacman -U \\
+  ./{platform_package.name} ./{pacman_package.name}
 ```"""
     else:
         if not rpm_package:
@@ -208,13 +199,8 @@ sudo /usr/libexec/caihong-platform/install-caihong-platform \\
         update_instructions = f"""Armada is Fedora-based:
 
 ```sh
-bsdtar -xOf ./{platform_package.name} \\
-  usr/libexec/caihong-platform/install-caihong-platform > ./install-caihong-platform
-sudo sh ./install-caihong-platform \\
-  {platform_package.name}
-sudo dnf install ./{rpm_package.name}
-sudo /usr/libexec/caihong-platform/install-caihong-platform \\
-  {npu_package.name}
+sudo dnf upgrade --refresh && sudo dnf install --allowerasing \\
+  ./{platform_package.name} ./{rpm_package.name}
 ```"""
     source_lines = []
     for component in ("LINUX", "LIBCAMERA", "PLASMA_CAMERA", "QBOOTCTL", "MKBOOTIMG",
@@ -299,9 +285,13 @@ Decompressed flashable rootfs SHA-256:
 
 ## Existing rootfs updates
 
-After verifying the SHA-256 values below, extract and use the installer from
-the new platform package so its migration steps run even on older installations.
-Install the device-only payloads without reflashing:
+Verify the SHA-256 values below and fully upgrade the system before installing.
+The native platform package includes the NPU runtime; there is no separate NPU
+archive or custom tar installer. Stop if the system upgrade fails.
+On Arch systems previously updated with the legacy tar installer, add
+`--overwrite 'usr/*'` to the first `pacman -U` command to adopt existing payload
+files. Do not use that option for subsequent native-package upgrades.
+Reboot only after both native packages install successfully.
 
 {update_instructions}
 
@@ -369,29 +359,16 @@ def main() -> int:
         f"caihong-boot-userdata-{kernel_release}.img",
     ]
     package_pointers = {
-        "archlinuxarm": (
-            "CAIHONG_PLATFORM_PACKAGE_ARCHLINUXARM",
-            "CAIHONG_NPU_PACKAGE_LIB",
-        ),
-        "armada": (
-            "CAIHONG_PLATFORM_PACKAGE_ARMADA",
-            "CAIHONG_NPU_PACKAGE_LIB64",
-        ),
+        "archlinuxarm": "CAIHONG_PLATFORM_PACKAGE_ARCHLINUXARM",
+        "armada": "CAIHONG_PLATFORM_PACKAGE_ARMADA",
     }
-    platform_pointer, npu_pointer = package_pointers[args.distribution]
+    platform_pointer = package_pointers[args.distribution]
     platform_package = resolve_package_pointer(release_dir, platform_pointer)
-    npu_package = resolve_package_pointer(release_dir, npu_pointer)
-    npu_packages = [npu_package]
     if args.distribution == "archlinuxarm":
         names.append(kernel_package_name)
     else:
         names.append(rpm_package_name)
-    names.extend(
-        (
-            platform_package.name,
-            *(npu_package.name for npu_package in npu_packages),
-        )
-    )
+    names.append(platform_package.name)
     for name in names:
         target = assets / name
         shutil.copy2(release_dir / name, target)
@@ -457,15 +434,7 @@ def main() -> int:
         "bytes": platform_package.stat().st_size,
         "sha256": asset_hashes[platform_package.name],
     }
-    manifest["npu_packages"] = [
-        {
-            "name": npu_package.name,
-            "bytes": npu_package.stat().st_size,
-            "sha256": asset_hashes[npu_package.name],
-        }
-        for npu_package in npu_packages
-    ]
-    npu_package = npu_packages[0]
+    manifest["platform_package"]["includes_npu"] = True
     manifest_path = args.manifest or release_dir / "release-manifest.json"
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")

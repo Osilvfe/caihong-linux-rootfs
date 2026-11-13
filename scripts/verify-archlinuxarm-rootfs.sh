@@ -448,16 +448,6 @@ for setting in build=caihong version=26.08.1 backend=libcamera-direct \
 		failed=1
 	fi
 done
-if ! awk '
-	/^\[/ { in_options = ($0 == "[options]") }
-	in_options && $0 == "IgnorePkg = libcamera libcamera-ipa libcamera-tools gst-plugin-libcamera plasma-camera" {
-		found = 1
-	}
-	END { exit !found }
-' "$target/etc/pacman.conf" 2>/dev/null; then
-	echo "rootfs does not protect the Caihong libcamera build from package upgrades" >&2
-	failed=1
-fi
 if [ -e \
 	"$target/usr/lib/qt6/plugins/powerdevil/action/powerdevil_keyboardbrightnesscontrolaction.so" ]; then
 	echo "rootfs still contains the unsupported PowerDevil keyboard-backlight action" >&2
@@ -476,7 +466,7 @@ fi
 
 required_packages='bluez bluez-utils openssh networkmanager hostapd dnsmasq nftables pipewire
 pipewire-pulse wireplumber rtkit alsa-utils iio-sensor-proxy libssc
-gst-plugin-libcamera plasma-camera krita firefox
+caihong-platform krita firefox
 python-jinja python-ply python-yaml qt6-tools'
 package_db=$target/var/lib/pacman/local
 for package in $required_packages; do

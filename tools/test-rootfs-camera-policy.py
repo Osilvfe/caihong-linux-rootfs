@@ -46,10 +46,11 @@ class RootfsCameraPolicyTests(unittest.TestCase):
         self.assertTrue(removed)
         self.assertTrue(removed <= rejected, removed - rejected)
 
-    def test_remaining_camera_packages_are_required(self):
+    def test_native_platform_package_owns_the_camera_stack(self):
         required = assignment(VERIFIER, 'required_packages')
-        self.assertIn('gst-plugin-libcamera', required)
-        self.assertIn('plasma-camera', required)
+        self.assertIn('caihong-platform', required)
+        self.assertNotIn('gst-plugin-libcamera', required)
+        self.assertNotIn('plasma-camera', required)
 
 
 if __name__ == '__main__':

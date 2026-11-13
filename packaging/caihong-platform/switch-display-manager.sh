@@ -11,7 +11,6 @@ set -eu
 CDPATH=
 
 root=${CAIHONG_PLATFORM_ROOT:-/}
-chroot_tool=${CAIHONG_CHROOT_TOOL:-chroot}
 systemctl_tool=${CAIHONG_SYSTEMCTL:-systemctl}
 case $root in
 	/|/*) ;;
@@ -33,15 +32,6 @@ if [ ! -x "$root/usr/bin/pacman" ]; then
 	# their display manager alone.
 	exit 0
 fi
-
-run_in_target()
-{
-	if [ "$root" = / ]; then
-		"$@"
-	else
-		"$chroot_tool" "$root" "$@"
-	fi
-}
 
 run_systemctl()
 {
@@ -82,14 +72,8 @@ if [ -L "$alias" ]; then
 	esac
 fi
 
-if ! run_in_target pacman -Qq plasma-login-manager >/dev/null 2>&1; then
-	echo "installing plasma-login-manager" >&2
-	run_in_target pacman -S --needed --noconfirm --disable-sandbox \
-		plasma-login-manager
-fi
-
 if [ ! -e "$root/usr/lib/systemd/system/plasmalogin.service" ]; then
-	echo "plasmalogin.service is missing after installing plasma-login-manager" >&2
+	echo "plasmalogin.service is missing; install the plasma-login-manager dependency" >&2
 	exit 1
 fi
 
@@ -99,11 +83,5 @@ if [ -L "$alias" ]; then
 	rm -f -- "$alias"
 fi
 run_systemctl enable plasmalogin.service >/dev/null
-
-for package in sddm-kcm sddm; do
-	if run_in_target pacman -Qq "$package" >/dev/null 2>&1; then
-		run_in_target pacman -R --noconfirm "$package"
-	fi
-done
 
 echo "Plasma Login Manager is now the active display manager" >&2

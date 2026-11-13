@@ -13,9 +13,7 @@ output=${1:-"$project_dir/caihong-armada-rootfs.img"}
 armada_image=${ARMADA_IMAGE:-ghcr.io/armada-os/armada:stable}
 module_tree=${MODULE_TREE:-"$project_dir/modules-current"}
 release_dir=${RELEASE_DIR:-"$project_dir/release"}
-npu_bundle=${NPU_BUNDLE:-"$project_dir/firmware-assets/caihong-npu"}
 platform_package=${CAIHONG_PLATFORM_PACKAGE:-}
-npu_package=${CAIHONG_NPU_PACKAGE:-}
 kernel_rpm=${KERNEL_RPM:-}
 image_min_free_mib=${IMAGE_MIN_FREE_MIB:-2048}
 image_slack_percent=${IMAGE_SLACK_PERCENT:-25}
@@ -37,7 +35,7 @@ esac
 (( image_slack_percent >= 5 )) || fail "IMAGE_SLACK_PERCENT must be at least 5"
 [[ $sparse_image == 0 || $sparse_image == 1 ]] || fail "SPARSE_IMAGE must be 0 or 1"
 
-required_tools=(blkid bsdtar chroot depmod e2fsck find img2simg mkfs.ext4
+required_tools=(blkid bsdtar chroot depmod e2fsck find img2simg mkfs.ext4 rpm rpm2cpio
 	mount python3 rsync sha256sum skopeo systemctl umoci umount)
 for tool in "${required_tools[@]}"; do
 	command -v "$tool" >/dev/null 2>&1 || fail "missing host tool: $tool"
@@ -45,12 +43,9 @@ done
 [[ $(uname -m) == aarch64 || $(uname -m) == arm64 ]] || \
 	fail "the Armada rootfs must be assembled on an AArch64 host"
 [[ -d $module_tree/lib/modules ]] || fail "missing module tree: $module_tree"
-[[ -d $npu_bundle ]] || fail "missing release NPU bundle: $npu_bundle"
 [[ -f $release_dir/KERNEL_RELEASE ]] || fail "missing release/KERNEL_RELEASE"
 platform_pointer=$release_dir/CAIHONG_PLATFORM_PACKAGE_ARMADA
 [[ -f $platform_pointer ]] || platform_pointer=$release_dir/CAIHONG_PLATFORM_PACKAGE
-npu_pointer=$release_dir/CAIHONG_NPU_PACKAGE_LIB64
-[[ -f $npu_pointer ]] || npu_pointer=$release_dir/CAIHONG_NPU_PACKAGE
 
 resolve_input()
 {
@@ -63,7 +58,6 @@ resolve_input()
 }
 
 platform_package=$(resolve_input "$platform_package" platform package)
-npu_package=$(resolve_input "$npu_package" NPU package)
 kernel_rpm=$(resolve_input "$kernel_rpm" kernel RPM)
 if [[ -z $kernel_rpm && -f $release_dir/LINUX_CAIHONG_RPM ]]; then
 	kernel_rpm=$(resolve_input "$release_dir/$(<"$release_dir/LINUX_CAIHONG_RPM")" kernel RPM)
@@ -72,17 +66,14 @@ fi
 [[ -n $platform_package ]] || \
 	[[ -f $platform_pointer ]] || fail "missing Armada platform package pointer"
 [[ -n $platform_package ]] || platform_package=$release_dir/$(<"$platform_pointer")
-[[ -n $npu_package ]] || \
-	[[ -f $npu_pointer ]] || fail "missing lib64 NPU package pointer"
-[[ -n $npu_package ]] || npu_package=$release_dir/$(<"$npu_pointer")
 platform_package=$(resolve_input "$platform_package" platform package)
-npu_package=$(resolve_input "$npu_package" NPU package)
 
-platform_distribution=$(bsdtar -xOf "$platform_package" \
-	usr/share/caihong-platform/distribution)
+[[ $(rpm -qp --queryformat '%{NAME}' "$platform_package") == caihong-platform ]]
+platform_distribution=$(rpm2cpio "$platform_package" | bsdtar -xOf - \
+	./usr/share/caihong-platform/distribution)
 [[ $platform_distribution == armada ]] || \
 	fail "platform package targets $platform_distribution, expected armada"
-npu_libdir=$(bsdtar -xOf "$npu_package" usr/share/caihong-npu/libdir)
+npu_libdir=$(rpm2cpio "$platform_package" | bsdtar -xOf - ./usr/share/caihong-npu/libdir)
 [[ $npu_libdir == lib64 ]] || \
 	fail "NPU package uses $npu_libdir, expected lib64"
 
@@ -149,10 +140,6 @@ SYSTEMD_OFFLINE=1 chroot "$rootfs" /usr/bin/env -i \
 	dnsmasq e2fsprogs hostapd iio-sensor-proxy openssh-server \
 	android-tools python3-gobject \
 	libbsd libqmi libqrtr-glib libyaml protobuf-c
-rm -f -- "$rootfs/etc/resolv.conf"
-if (( resolver_saved )); then
-	cp -a --no-dereference "$work_dir/resolv.conf.original" "$rootfs/etc/resolv.conf"
-fi
 
 # The platform payload owns the complete device overlay, camera stack and
 # board utilities.  It is installed later through the same package used for
@@ -164,23 +151,20 @@ echo "installing packaged Caihong update payloads"
 install -d -m 0755 "$rootfs/tmp/caihong-packages"
 install -m 0644 "$platform_package" \
 	"$rootfs/tmp/caihong-packages/${platform_package##*/}"
-if [[ -n $npu_package ]]; then
-	install -m 0644 "$npu_package" \
-		"$rootfs/tmp/caihong-packages/${npu_package##*/}"
-fi
-CAIHONG_PLATFORM_ROOT="$rootfs" CAIHONG_PLATFORM_IMAGE_BUILD=1 \
-"$project_dir/packaging/caihong-platform/install-caihong-platform" \
-	"$rootfs/tmp/caihong-packages/${platform_package##*/}"
-if [[ -n $npu_package ]]; then
-	CAIHONG_PLATFORM_ROOT="$rootfs" \
-	"$project_dir/packaging/caihong-platform/install-caihong-platform" \
-		"$rootfs/tmp/caihong-packages/${npu_package##*/}"
-fi
-
 install -m 0644 "$kernel_rpm" "$rootfs/tmp/linux-caihong.rpm"
+install -d -m 0755 "$rootfs/run/caihong"
+touch "$rootfs/run/caihong/offline-rootfs-build"
 chroot "$rootfs" /usr/bin/env -i \
-	HOME=/root LANG=C PATH=/usr/sbin:/usr/bin:/sbin:/bin CAIHONG_SKIP_BOOT_FLASH=1 \
-	/usr/bin/dnf5 -y --disablerepo='*' install /tmp/linux-caihong.rpm
+	HOME=/root LANG=C PATH=/usr/sbin:/usr/bin:/sbin:/bin \
+	CAIHONG_SKIP_BOOT_FLASH=1 CAIHONG_PLATFORM_IMAGE_BUILD=1 \
+	/usr/bin/dnf5 -y --allowerasing install \
+	"/tmp/caihong-packages/${platform_package##*/}" /tmp/linux-caihong.rpm
+chroot "$rootfs" rpm -q caihong-platform
+rm -f -- "$rootfs/run/caihong/offline-rootfs-build"
+rm -f -- "$rootfs/etc/resolv.conf"
+if (( resolver_saved )); then
+	cp -a --no-dereference "$work_dir/resolv.conf.original" "$rootfs/etc/resolv.conf"
+fi
 chroot "$rootfs" rpm -q linux-caihong >/dev/null || \
 	fail "linux-caihong RPM was not registered"
 [[ $(<"$rootfs/usr/lib/linux-caihong/kernel-release") == "$kernel_release" ]] || \

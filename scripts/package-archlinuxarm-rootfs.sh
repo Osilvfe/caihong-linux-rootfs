@@ -12,9 +12,7 @@ mirror=${ARCHLINUXARM_MIRROR:-https://mirrors.tuna.tsinghua.edu.cn/archlinuxarm}
 mirror=${mirror%/}
 package_cache=${PACKAGE_CACHE:-"$project_dir/build/pacman-cache"}
 ssc_bundle=${SSC_BUNDLE:-"$project_dir/firmware-assets/caihong-ssc"}
-npu_bundle=${NPU_BUNDLE:-"$project_dir/firmware-assets/caihong-npu"}
 platform_package=${CAIHONG_PLATFORM_PACKAGE:-}
-npu_package=${CAIHONG_NPU_PACKAGE:-}
 output_format=${OUTPUT_FORMAT:-ext4}
 image_size_gib=${IMAGE_SIZE_GIB:-}
 image_min_free_mib=${IMAGE_MIN_FREE_MIB:-2048}
@@ -65,32 +63,15 @@ if [[ ! -d $ssc_bundle ]]; then
 	exit 1
 fi
 ssc_bundle=$(cd -- "$ssc_bundle" && pwd)
-if [[ ! -d $npu_bundle ]]; then
-	echo "missing release NPU bundle: $npu_bundle" >&2
-	exit 1
-fi
-npu_bundle=$(cd -- "$npu_bundle" && pwd)
 platform_pointer=$project_dir/release/CAIHONG_PLATFORM_PACKAGE_ARCHLINUXARM
 [[ -f $platform_pointer ]] || platform_pointer=$project_dir/release/CAIHONG_PLATFORM_PACKAGE
-npu_pointer=$project_dir/release/CAIHONG_NPU_PACKAGE_LIB
-[[ -f $npu_pointer ]] || npu_pointer=$project_dir/release/CAIHONG_NPU_PACKAGE
 if [[ -z $platform_package && -f $platform_pointer ]]; then
 	platform_package=$project_dir/release/$(<"$platform_pointer")
-fi
-if [[ -z $npu_package && -f $npu_pointer ]]; then
-	npu_package=$project_dir/release/$(<"$npu_pointer")
 fi
 if [[ -n $platform_package ]]; then
 	platform_package=$(cd -- "$(dirname -- "$platform_package")" && pwd)/${platform_package##*/}
 	[[ -f $platform_package ]] || {
 		echo "platform package not found: $platform_package" >&2
-		exit 1
-	}
-fi
-if [[ -n $npu_package ]]; then
-	npu_package=$(cd -- "$(dirname -- "$npu_package")" && pwd)/${npu_package##*/}
-	[[ -f $npu_package ]] || {
-		echo "NPU package not found: $npu_package" >&2
 		exit 1
 	}
 fi
@@ -104,13 +85,8 @@ platform_distribution=$(bsdtar -xOf "$platform_package" \
 	echo "platform package targets $platform_distribution, expected archlinuxarm" >&2
 	exit 1
 }
-if [[ -n $npu_package ]]; then
-	npu_libdir=$(bsdtar -xOf "$npu_package" usr/share/caihong-npu/libdir)
-	[[ $npu_libdir == lib ]] || {
-		echo "NPU package uses $npu_libdir, expected lib" >&2
-		exit 1
-	}
-fi
+bsdtar -xOf "$platform_package" .PKGINFO | grep -qx 'pkgname = caihong-platform'
+[[ $(bsdtar -xOf "$platform_package" usr/share/caihong-npu/libdir) == lib ]]
 
 # This is intentionally a native AArch64 development environment.  base-devel
 # provides GCC, binutils, make, pkgconf and the normal Arch package build tools;
@@ -509,10 +485,8 @@ save_package_cache
 	pacman -Scc --disable-sandbox --noconfirm
 
 # The platform payload replaces the distribution libcamera implementation.
-# Remove the packages that own those paths before installing it, while keeping
-# the GStreamer plugin and Plasma Camera package records for their runtime
-# dependencies.
-for package in libcamera libcamera-ipa libcamera-tools; do
+for package in libcamera libcamera-ipa libcamera-tools gst-plugin-libcamera \
+	plasma-camera power-profiles-daemon sddm-kcm sddm; do
 	if "$chroot_tool" "$rootfs" "${chroot_env[@]}" \
 		pacman -Qq "$package" >/dev/null 2>&1; then
 		"$chroot_tool" "$rootfs" "${chroot_env[@]}" \
@@ -541,27 +515,6 @@ for package in "${unwanted_boot_packages[@]}"; do
 	fi
 done
 
-# These distribution packages own the same paths as the Caihong build.  Keep
-# system upgrades from silently replacing the custom camera stack before an
-# updated platform package is available.
-libcamera_ignore='IgnorePkg = libcamera libcamera-ipa libcamera-tools gst-plugin-libcamera plasma-camera'
-pacman_conf="$rootfs/etc/pacman.conf"
-pacman_conf_new="$pacman_conf.caihong"
-awk -v directive="$libcamera_ignore" '
-	$0 == "# Managed by the Caihong rootfs builder." || $0 == directive { next }
-	$0 == "[options]" {
-		print
-		print "# Managed by the Caihong rootfs builder."
-		print directive
-		inserted = 1
-		next
-	}
-	{ print }
-	END { if (!inserted) exit 1 }
-' "$pacman_conf" > "$pacman_conf_new"
-chmod --reference="$pacman_conf" "$pacman_conf_new"
-chown --reference="$pacman_conf" "$pacman_conf_new"
-mv -f -- "$pacman_conf_new" "$pacman_conf"
 
 # libcamera, Plasma Camera, Toolbox, VA-API and the board utilities are all
 # part of the Caihong platform package.  Their only producer is
@@ -570,19 +523,12 @@ echo "installing packaged Caihong update payloads"
 install -d -m 0755 "$rootfs/tmp/caihong-packages"
 install -m 0644 "$platform_package" \
 	"$rootfs/tmp/caihong-packages/${platform_package##*/}"
-if [[ -n $npu_package ]]; then
-	install -m 0644 "$npu_package" \
-		"$rootfs/tmp/caihong-packages/${npu_package##*/}"
-fi
-CAIHONG_PLATFORM_ROOT="$rootfs" \
-CAIHONG_PLATFORM_IMAGE_BUILD=1 \
-"$project_dir/packaging/caihong-platform/install-caihong-platform" \
-	"$rootfs/tmp/caihong-packages/${platform_package##*/}"
-if [[ -n $npu_package ]]; then
-	CAIHONG_PLATFORM_ROOT="$rootfs" \
-	"$project_dir/packaging/caihong-platform/install-caihong-platform" \
-		"$rootfs/tmp/caihong-packages/${npu_package##*/}"
-fi
+install -d -m 0755 "$rootfs/run/caihong"
+touch "$rootfs/run/caihong/offline-rootfs-build"
+"$chroot_tool" "$rootfs" "${chroot_env[@]}" \
+	env CAIHONG_PLATFORM_IMAGE_BUILD=1 \
+	pacman -U --noconfirm "/tmp/caihong-packages/${platform_package##*/}"
+"$chroot_tool" "$rootfs" "${chroot_env[@]}" pacman -Q caihong-platform
 
 # The platform package is mandatory: it is the only source of device-specific
 # content for both full images and incremental updates.

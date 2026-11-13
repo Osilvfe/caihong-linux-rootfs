@@ -133,12 +133,15 @@ class DisplayManagerMigrationTests(unittest.TestCase):
             capture_output=True,
         )
 
-    def test_existing_sddm_installation_is_migrated_to_plm(self):
+    def test_native_transaction_selects_plm_without_running_pacman(self):
         pacman = self.root / 'usr/bin/pacman'
         pacman.parent.mkdir(parents=True)
         pacman.write_text('#!/bin/sh\nexec fake-pacman "$@"\n')
         pacman.chmod(0o755)
         (self.work / 'sddm-installed').touch()
+        service = self.root / 'usr/lib/systemd/system/plasmalogin.service'
+        service.parent.mkdir(parents=True)
+        service.write_text('[Unit]\n[Install]\nAlias=display-manager.service\n')
         alias = self.root / 'etc/systemd/system/display-manager.service'
         alias.parent.mkdir(parents=True)
         alias.symlink_to('/usr/lib/systemd/system/sddm.service')
@@ -148,14 +151,19 @@ class DisplayManagerMigrationTests(unittest.TestCase):
         self.assertEqual(
             alias.readlink(), Path('/usr/lib/systemd/system/plasmalogin.service')
         )
-        self.assertFalse((self.work / 'sddm-installed').exists())
+        self.assertTrue((self.work / 'sddm-installed').exists())
         log = self.log.read_text()
-        self.assertIn(
-            'pacman -S --needed --noconfirm --disable-sandbox plasma-login-manager', log
-        )
-        self.assertIn('pacman -R --noconfirm sddm-kcm', log)
-        self.assertIn('pacman -R --noconfirm sddm', log)
+        self.assertNotIn('pacman ', log)
         self.assertIn('systemctl --root=', log)
+
+    def test_missing_native_plm_dependency_fails_without_nested_pacman(self):
+        pacman = self.root / 'usr/bin/pacman'
+        pacman.parent.mkdir(parents=True)
+        pacman.touch(mode=0o755)
+        result = self.run_script()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('plasma-login-manager dependency', result.stderr)
+        self.assertFalse(self.log.exists())
 
     def test_non_arch_target_is_left_alone(self):
         result = self.run_script()

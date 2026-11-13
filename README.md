@@ -39,14 +39,17 @@ development release for this device; review the status table before installing.
   both direct-root boot images and the matching kernel modules.
 - `linux-caihong-<version>-1.aarch64.rpm`: RPM package for Fedora-based Armada
   containing the same kernel payload.
-- `caihong-platform-archlinuxarm-<version>.tar.zst`: the complete device payload
+- `caihong-platform-<version>-1-aarch64.pkg.tar.zst`: the native Arch Linux ARM package
   for Caihong services, firmware, tools, Caihong Toolbox, libcamera, Plasma
   Camera, qbootctl, power-profiles-daemon with the Qualcomm CPU driver, the
-  Qualcomm Iris VA-API driver and device integration. It
+  Qualcomm Iris VA-API driver, Qualcomm NPU/QNN/HTP runtime, Hexagon DSP components
+  and device integration. It
   is both the incremental update and the only device-content source installed
   into a freshly built rootfs image.
-- `caihong-npu-<version>-lib[64].tar.zst`: incremental update payload for the
-  Qualcomm NPU runtime and Hexagon DSP components.
+- `caihong-platform-<version>-1.aarch64.rpm`: the native Armada platform RPM with
+  the same core hardware components and NPU runtime, built for Fedora's `lib64`
+  layout. It currently does not include Caihong Toolbox. No standalone NPU archive
+  is published.
 
 The Release description records the SHA-256 digests of every asset, the
 reconstructed zstd stream and the decompressed flashable image, together with
@@ -299,13 +302,13 @@ not guarantee battery isolation.
 Upgrade an Arch Linux ARM installation with the matching pacman package:
 
 ```sh
-sudo pacman -U ./linux-caihong-*-aarch64.pkg.tar.zst
+sudo pacman -Syu && sudo pacman -U ./linux-caihong-*-aarch64.pkg.tar.zst
 ```
 
 Upgrade a Fedora-based Armada installation with the matching RPM:
 
 ```sh
-sudo dnf install ./linux-caihong-*-1.aarch64.rpm
+sudo dnf upgrade --refresh && sudo dnf install ./linux-caihong-*-1.aarch64.rpm
 ```
 
 The package reads the slot recorded during the current boot, selects the image
@@ -315,29 +318,48 @@ bootable, or successful flags.
 
 ## Device component updates
 
-Existing rootfs installations do not need reflashing. Install the matching
-platform payload, then the matching NPU payload:
+Existing rootfs installations do not need reflashing. **Fully upgrade all system
+packages before installing update packages**: run `sudo pacman -Syu` on Arch Linux
+ARM or `sudo dnf upgrade --refresh` on Armada. Update packages do not bundle all
+distribution runtime libraries, and the installer does not upgrade the system
+automatically. Updating only device components or individual dependencies can
+cause library version mismatches. If the system upgrade fails, resolve the error
+before continuing.
+
+NPU support is included in `caihong-platform`; the custom tar installer is no
+longer used. On Arch Linux ARM, install the native platform and matching kernel:
 
 ```sh
-bsdtar -xOf ./caihong-platform-archlinuxarm-<version>.tar.zst \
-  usr/libexec/caihong-platform/install-caihong-platform > ./install-caihong-platform
-sudo sh ./install-caihong-platform \
-  ./caihong-platform-archlinuxarm-<version>.tar.zst
-sudo pacman -U ./linux-caihong-<version>-1-aarch64.pkg.tar.zst
-sudo /usr/libexec/caihong-platform/install-caihong-platform \
-  ./caihong-npu-<version>-lib.tar.zst
+sudo pacman -Syu && sudo pacman -U \
+  ./caihong-platform-<version>-1-aarch64.pkg.tar.zst \
+  ./linux-caihong-<kernel-version>-1-aarch64.pkg.tar.zst
 ```
 
-The installer verifies the manifest and backs up replaced files under
-`/var/lib/caihong-packages/<component>/previous`. Systemd configuration
-candidates are staged under
-`/var/lib/caihong-config-pending/<component>/etc/systemd` for manual review;
-other `/etc` files use the `.caihong-new` suffix. Legacy candidates are left
-for manual cleanup. Run `install-caihong-platform --rollback <component>`
-to restore the previous files.
+On Armada, install both RPMs with DNF:
 
-Use the installer extracted from the new platform package for the first
-command. An older preinstalled installer does not run the new migration steps.
+```sh
+sudo dnf upgrade --refresh && sudo dnf install --allowerasing \
+  ./caihong-platform-<version>-1.aarch64.rpm \
+  ./linux-caihong-<kernel-version>-1.aarch64.rpm
+```
+
+On Arch devices previously updated with the legacy tar installer, add
+`--overwrite 'usr/*'` to the first `pacman -U` command to adopt the existing
+unregistered payload files. Do not use it for later native-package upgrades.
+Back up important data and review package-manager prompts for replacing the
+distribution camera stack, PPD and SDDM. Armada's `--allowerasing` allows the
+corresponding platform-component replacements.
+
+Binaries, firmware and configuration templates are now tracked by pacman/RPM.
+Check the installed version with `pacman -Q caihong-platform` or
+`rpm -q caihong-platform`. Existing `/etc` configuration and service enablement
+are preserved. Systemd candidates are staged under
+`/var/lib/caihong-config-pending/caihong-platform/etc/systemd`; other configuration
+candidates use `.caihong-new`. Review them manually. Do not use the legacy tar
+installer or its rollback command.
+
+Reboot after both packages install successfully to activate the matching kernel,
+modules and updated services.
 
 SSC sensor defaults are included in the platform package. Installation fills
 missing files under `/var/lib/caihong-ssc/root` and preserves existing sensor
@@ -348,10 +370,6 @@ Plasma Login Manager and removes SDDM. An administrator-selected alternative
 display manager is preserved. Fresh images enable PLM during image creation.
 This check runs synchronously during each platform-package installation;
 it is not a boot-time service or timer.
-
-The kernel RPM is included in the same update bundle. Armada is Fedora-based:
-install `caihong-platform-armada-<version>.tar.zst` with the transactional
-installer, then install `linux-caihong-<version>-1.aarch64.rpm` with DNF.
 
 ## Building locally
 
@@ -364,7 +382,6 @@ The scripts select the native or cross toolchain automatically:
 scripts/checkout-dependencies.sh
 scripts/build-kernel-release.sh
 sudo -E scripts/build-caihong-platform-package.sh release
-scripts/build-caihong-npu-package.sh release
 sudo -E env CHROOT_TOOL=chroot MODULE_TREE="$PWD/modules-current" \
   OUTPUT_FORMAT=ext4 SPARSE_IMAGE=1 \
   scripts/package-archlinuxarm-rootfs.sh \

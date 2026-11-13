@@ -1,0 +1,77 @@
+#!/bin/sh
+set -eu
+CDPATH=
+
+root=${CAIHONG_PLATFORM_ROOT:-/}
+root=$(cd -- "$root" && pwd)
+assets=$root/usr/share/caihong-platform
+state=$root/var/lib/caihong-platform
+image_build=${CAIHONG_PLATFORM_IMAGE_BUILD:-0}
+if [ -e "$root/run/caihong/offline-rootfs-build" ]; then
+	image_build=1
+fi
+initial=0
+if [ ! -e "$state/initialized" ] &&
+	[ ! -e "$root/var/lib/caihong-packages/caihong-platform/version" ]; then
+	initial=1
+fi
+mkdir -p "$state"
+
+if [ -d "$assets/defaults/etc" ]; then
+	find "$assets/defaults/etc" \( -type f -o -type l \) -print |
+	while IFS= read -r source; do
+		relative=${source#"$assets/defaults/"}
+		destination=$root/$relative
+		if [ "$image_build" = 1 ] ||
+			{ [ "$initial" = 1 ] && [ ! -e "$destination" ] && [ ! -L "$destination" ]; }; then
+			mkdir -p "$(dirname -- "$destination")"
+			cp -a --remove-destination "$source" "$destination"
+		else
+			case $relative in
+				etc/systemd/*)
+					destination=$root/var/lib/caihong-config-pending/caihong-platform/$relative ;;
+				*) destination=$destination.caihong-new ;;
+			esac
+			mkdir -p "$(dirname -- "$destination")"
+			cp -a --remove-destination "$source" "$destination"
+		fi
+	done
+fi
+
+ucm=usr/share/alsa/ucm2/conf.d/sm8650/SM8650-MTP.conf
+if [ -f "$assets/defaults/$ucm" ]; then
+	mkdir -p "$(dirname -- "$root/$ucm")"
+	cp "$assets/defaults/$ucm" "$root/$ucm"
+fi
+
+seed=$root/usr/share/caihong-ssc/root
+if [ -d "$seed" ]; then
+	find "$seed" \( -type f -o -type l \) -print |
+	while IFS= read -r source; do
+		destination=$root/var/lib/caihong-ssc/root/${source#"$seed/"}
+		if [ ! -e "$destination" ] && [ ! -L "$destination" ]; then
+			mkdir -p "$(dirname -- "$destination")"
+			cp -a "$source" "$destination"
+		fi
+	done
+fi
+
+for relative in \
+	etc/alsa/state-daemon.conf \
+	usr/share/libcamera/ipa/simple/sc1320cs.yaml \
+	usr/share/libcamera/ipa/simple/sc820cs.yaml \
+	usr/lib/qt6/plugins/powerdevil/action/powerdevil_keyboardbrightnesscontrolaction.so \
+	usr/lib64/qt6/plugins/powerdevil/action/powerdevil_keyboardbrightnesscontrolaction.so \
+	usr/libexec/caihong-platform/install-caihong-platform; do
+	rm -f -- "$root/$relative"
+done
+
+if [ "$image_build" != 1 ]; then
+	CAIHONG_PLATFORM_ROOT="$root" CAIHONG_PLATFORM_UPDATE_INSTALL=1 \
+		"$root/usr/libexec/caihong-platform/switch-display-manager"
+	if [ "$root" = / ] && [ -d /run/systemd/system ]; then
+		systemctl daemon-reload
+		udevadm control --reload-rules
+	fi
+fi
+touch "$state/initialized"

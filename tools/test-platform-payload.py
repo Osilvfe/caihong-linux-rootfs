@@ -29,6 +29,7 @@ class PlatformPayloadTests(unittest.TestCase):
             'install-caihong-qbootctl-stage.sh',
             'install-caihong-utilities-stage.sh',
             'install-caihong-ppd-stage.sh',
+            'install-caihong-npu.sh',
         ):
             self.assertIn(script, PLATFORM)
         self.assertIn('caihong-build-root.sh" prepare', PLATFORM)
@@ -69,21 +70,18 @@ class PlatformPayloadTests(unittest.TestCase):
 
     def test_platform_payload_is_applied_in_image_build_mode(self):
         self.assertIn('CAIHONG_PLATFORM_IMAGE_BUILD=1', ROOTFS)
-        self.assertIn('install-caihong-platform', ROOTFS)
+        self.assertIn('pacman -U --noconfirm', ROOTFS)
 
     def test_platform_package_contains_camera_and_qbootctl(self):
-        verifier = (PROJECT / 'scripts/verify-caihong-update-packages.sh').read_text()
+        verifier = (PROJECT / 'scripts/verify-platform-packages.py').read_text()
         for path in (
             'usr/bin/plasma-camera',
             'usr/bin/cam',
             'usr/bin/qcam',
-            'usr/lib/libcamera.so.0.7',
-            'usr/lib/gstreamer-1.0/libgstlibcamera.so',
+            'libcamera.so.0.7',
+            'gstreamer-1.0/libgstlibcamera.so',
             'usr/local/sbin/qbootctl',
-            'usr/share/caihong/libcamera-build-info',
-            'usr/share/caihong/plasma-camera-build-info',
             'usr/lib/power-profiles-daemon',
-            'usr/share/caihong/ppd-build-info',
         ):
             self.assertIn(path, verifier)
 
@@ -110,7 +108,7 @@ class PlatformPayloadTests(unittest.TestCase):
 
     def test_armada_image_installs_the_same_platform_payload(self):
         self.assertIn('CAIHONG_PLATFORM_IMAGE_BUILD=1', ARMADA)
-        self.assertIn('install-caihong-platform', ARMADA)
+        self.assertIn('dnf5 -y --allowerasing install', ARMADA)
         for entry in (
             'rootfs/archlinuxarm/."',
             'rootfs/armada/."',
@@ -124,6 +122,15 @@ class PlatformPayloadTests(unittest.TestCase):
 
     def test_armada_requires_a_platform_package(self):
         self.assertIn('missing Armada platform package pointer', ARMADA)
+
+    def test_no_standalone_npu_delivery_remains(self):
+        for relative in ('scripts/package-archlinuxarm-rootfs.sh',
+                         'scripts/package-armada-rootfs.sh',
+                         '.github/workflows/release.yml',
+                         '.github/workflows/kernel-package.yml'):
+            contents = (PROJECT / relative).read_text()
+            self.assertNotIn('CAIHONG_NPU_PACKAGE', contents)
+            self.assertNotIn('build-caihong-npu-package.sh', contents)
 
 
 if __name__ == '__main__':

@@ -48,13 +48,15 @@ root=PARTLABEL=linux rootfstype=ext4 rootwait rw
   和配套内核模块的 pacman 软件包。
 - `linux-caihong-<version>-1.aarch64.rpm`：供 Fedora 基础 Armada 使用的 RPM，
   内容与 pacman 包相同。
-- `caihong-platform-archlinuxarm-<version>.tar.zst`：Caihong 服务、固件、
+- `caihong-platform-<version>-1-aarch64.pkg.tar.zst`：Arch Linux ARM 原生平台包，
+  包含 Caihong 服务、固件、
   工具、Caihong Toolbox、libcamera、Plasma Camera、qbootctl、带 Qualcomm
   CPU 驱动的 power-profiles-daemon、Qualcomm Iris VA-API 驱动和设备集成的
-  完整载荷。它既是增量更新包，也是新构建 rootfs
+  Qualcomm NPU／QNN／HTP 运行时和 Hexagon DSP 组件。它既是增量更新包，也是新构建 rootfs
   镜像中设备内容的唯一来源。
-- `caihong-npu-<version>-lib[64].tar.zst`：Qualcomm NPU 运行时与 Hexagon DSP
-  组件的增量更新载荷。
+- `caihong-platform-<version>-1.aarch64.rpm`：Armada 原生平台 RPM，包含同样的
+  基础硬件组件和 NPU，按 Fedora 的 `lib64` 布局构建；目前不含 Caihong Toolbox。
+  不再单独交付 NPU 压缩包。
 
 Release 说明会记录每个资产、重组后 zstd 压缩流和解压后可刷写镜像的 SHA-256，
 以及文件系统逻辑大小和实际使用的源码版本。可安装资产不会使用 ZIP 打包。
@@ -313,13 +315,13 @@ BLUETOOTH_MAC=02:12:34:56:78:91
 Arch Linux ARM 安装使用 Release 中的 pacman 软件包升级内核、设备树和模块：
 
 ```sh
-sudo pacman -U ./linux-caihong-*-aarch64.pkg.tar.zst
+sudo pacman -Syu && sudo pacman -U ./linux-caihong-*-aarch64.pkg.tar.zst
 ```
 
 基于 Fedora 的 Armada 安装使用匹配的 RPM：
 
 ```sh
-sudo dnf install ./linux-caihong-*-1.aarch64.rpm
+sudo dnf upgrade --refresh && sudo dnf install ./linux-caihong-*-1.aarch64.rpm
 ```
 
 软件包会读取本次启动时记录的实际槽位，根据根分区是 `linux` 还是 `userdata`
@@ -328,26 +330,39 @@ successful 标记。
 
 ## 设备组件更新
 
-已刷入 rootfs 的设备不需要重刷。按顺序安装对应的平台载荷和 NPU 载荷：
+已刷入 rootfs 的设备不需要重刷。**安装更新包前，必须先完整升级系统所有软件包**：
+Arch Linux ARM 执行 `sudo pacman -Syu`，Armada 执行 `sudo dnf upgrade --refresh`。
+更新包不包含发行版的全部运行库，安装器也不会自动升级系统；只更新设备组件或单独
+升级某个依赖可能造成运行库版本不匹配。系统升级失败时应先处理错误，不要继续安装。
+
+NPU 已合并到 `caihong-platform`，不再使用自定义 tar 安装器。Arch Linux ARM
+使用原生 pacman 包安装平台和匹配内核：
 
 ```sh
-bsdtar -xOf ./caihong-platform-archlinuxarm-<version>.tar.zst \
-  usr/libexec/caihong-platform/install-caihong-platform > ./install-caihong-platform
-sudo sh ./install-caihong-platform \
-  ./caihong-platform-archlinuxarm-<version>.tar.zst
-sudo pacman -U ./linux-caihong-<version>-1-aarch64.pkg.tar.zst
-sudo /usr/libexec/caihong-platform/install-caihong-platform \
-  ./caihong-npu-<version>-lib.tar.zst
+sudo pacman -Syu && sudo pacman -U \
+  ./caihong-platform-<version>-1-aarch64.pkg.tar.zst \
+  ./linux-caihong-<kernel-version>-1-aarch64.pkg.tar.zst
 ```
 
-安装器会校验 manifest，并把被覆盖文件备份到
-`/var/lib/caihong-packages/<component>/previous`。systemd 候选配置暂存在
-`/var/lib/caihong-config-pending/<component>/etc/systemd`，其他 `/etc` 配置以
-`<file>.caihong-new` 保存，供手动审阅。旧版本遗留的候选文件需手动整理。Armada 使用
-`caihong-platform-armada-<version>.tar.zst`。如需恢复上一版文件，运行
-`install-caihong-platform --rollback <component>`。
+Armada 使用 DNF 安装两个 RPM：
 
-首次命令请使用从新平台包中提取的安装器；旧系统预装的安装器不会执行新增的迁移步骤。
+```sh
+sudo dnf upgrade --refresh && sudo dnf install --allowerasing \
+  ./caihong-platform-<version>-1.aarch64.rpm \
+  ./linux-caihong-<kernel-version>-1.aarch64.rpm
+```
+
+如果 Arch 设备之前使用旧 tar 安装器更新，首次改用原生包时，在 `pacman -U`
+命令中额外添加 `--overwrite 'usr/*'`，接管此前未登记的设备文件；后续升级不要
+再加此选项。安装前备份重要数据，并确认包管理器提示的发行版相机、PPD 和 SDDM
+替换操作。Armada 的 `--allowerasing` 也用于解决这些平台组件的替换。
+
+二进制、固件和配置模板现在由 pacman／RPM 管理，可通过 `pacman -Q caihong-platform`
+或 `rpm -q caihong-platform` 查询。已有 `/etc` 配置及服务启用状态不覆盖；新的
+systemd 配置暂存在 `/var/lib/caihong-config-pending/caihong-platform/etc/systemd`，
+其他配置保存为 `<file>.caihong-new`，供手动审阅。不要再使用旧 tar 安装器或它的回滚命令。
+
+两个软件包都安装成功后重启，使配套内核、模块和服务版本生效。
 
 平台包包含 SSC 传感器默认数据，安装时补齐 `/var/lib/caihong-ssc/root` 下缺失的
 文件，并保留已有的传感器配置和校准数据。
@@ -355,10 +370,6 @@ sudo /usr/libexec/caihong-platform/install-caihong-platform \
 Arch Linux ARM 安装平台更新包时还会安装、启用 Plasma Login Manager 并移除
 SDDM；管理员已选择其他显示管理器时保留原选择。全新镜像在打包时启用 PLM。
 这项检查在每次安装平台包时同步执行，不通过开机服务或定时器执行。
-
-同一个更新交付物包含内核 RPM。Armada 基于 Fedora：用事务安装器安装
-`caihong-platform-armada-<version>.tar.zst`，再用 DNF 安装
-`linux-caihong-<version>-1.aarch64.rpm`。
 
 ## 本地构建
 
@@ -370,7 +381,6 @@ e2fsprogs 和 Android sparse 镜像工具（`img2simg`）；其他架构还需�
 scripts/checkout-dependencies.sh
 scripts/build-kernel-release.sh
 sudo -E scripts/build-caihong-platform-package.sh release
-scripts/build-caihong-npu-package.sh release
 sudo -E env CHROOT_TOOL=chroot MODULE_TREE="$PWD/modules-current" \
   OUTPUT_FORMAT=ext4 SPARSE_IMAGE=1 \
   scripts/package-archlinuxarm-rootfs.sh \

@@ -2,12 +2,6 @@ name: Build Caihong device update packages
 
 on:
   workflow_dispatch:
-    inputs:
-      include_npu:
-        description: Include the Qualcomm NPU runtime package
-        required: true
-        type: boolean
-        default: true
 
 permissions:
   contents: read
@@ -68,24 +62,15 @@ jobs:
             DISTRIBUTION=armada LIBDIR=lib64 \
             scripts/build-caihong-platform-package.sh release
           sudo chown -R "$USER:$USER" release
-          if [[ "${{ inputs.include_npu }}" == true ]]; then
-            scripts/build-caihong-npu-package.sh release
-            LIBDIR=lib64 scripts/build-caihong-npu-package.sh release
-            scripts/verify-caihong-update-packages.sh release
-          else
-            scripts/verify-caihong-update-packages.sh release --platform-only
-          fi
+          scripts/verify-caihong-update-packages.sh release
           (
             cd release
             sha256sum \
               linux-caihong-*-aarch64.pkg.tar.zst \
               linux-caihong-*-1.aarch64.rpm \
-              caihong-platform-archlinuxarm-*.tar.zst \
-              caihong-platform-armada-*.tar.zst \
+              caihong-platform-*-aarch64.pkg.tar.zst \
+              caihong-platform-*-1.aarch64.rpm \
               > SHA256SUMS.device-update
-            if compgen -G 'caihong-npu-*.tar.zst' >/dev/null; then
-              sha256sum caihong-npu-*.tar.zst >> SHA256SUMS.device-update
-            fi
           )
 
       - name: Show compiler cache statistics
@@ -106,9 +91,8 @@ jobs:
           path: |
             release/linux-caihong-*-aarch64.pkg.tar.zst
             release/linux-caihong-*-1.aarch64.rpm
-            release/caihong-platform-archlinuxarm-*.tar.zst
-            release/caihong-platform-armada-*.tar.zst
-            release/caihong-npu-*.tar.zst
+            release/caihong-platform-*-aarch64.pkg.tar.zst
+            release/caihong-platform-*-1.aarch64.rpm
             release/SHA256SUMS.device-update
           if-no-files-found: error
           compression-level: 0

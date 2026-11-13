@@ -1,0 +1,9 @@
+post_install()
+{
+	/usr/libexec/caihong-platform/configure-platform
+}
+
+post_upgrade()
+{
+	/usr/libexec/caihong-platform/configure-platform
+}

@@ -89,8 +89,6 @@ jobs:
             DISTRIBUTION=armada LIBDIR=lib64 \
             scripts/build-caihong-platform-package.sh release
           sudo chown -R "$USER:$USER" release
-          scripts/build-caihong-npu-package.sh release
-          LIBDIR=lib64 scripts/build-caihong-npu-package.sh release
           scripts/verify-caihong-update-packages.sh release
           kernel_release=$(cat release/KERNEL_RELEASE)
           printf 'kernel_release=%s\n' "$kernel_release" >> "$GITHUB_OUTPUT"
@@ -141,7 +139,7 @@ jobs:
             alsa-utils android-sdk-libsparse-utils bc bison build-essential \
             ccache curl dwarves e2fsprogs flex git kmod libarchive-tools \
             libegl-dev libelf-dev libgbm-dev libgles-dev libdrm-dev \
-            libssl-dev libva-dev meson ninja-build pkg-config python3 rsync \
+            libssl-dev libva-dev meson ninja-build pkg-config python3 rpm rsync \
             shellcheck zstd
 
       - name: Restore package downloads
@@ -195,7 +193,6 @@ jobs:
             CHROOT_TOOL=chroot \
             KERNEL_PACKAGE="$PWD/release/$(cat release/LINUX_CAIHONG_PACKAGE)" \
             CAIHONG_PLATFORM_PACKAGE="$PWD/release/$(cat release/CAIHONG_PLATFORM_PACKAGE_ARCHLINUXARM)" \
-            CAIHONG_NPU_PACKAGE="$PWD/release/$(cat release/CAIHONG_NPU_PACKAGE_LIB)" \
             LIBCAMERA_BUILD_JOBS="$jobs" \
             MODULE_TREE="$PWD/modules-current" \
             OUTPUT_FORMAT=ext4 \
@@ -217,7 +214,6 @@ jobs:
             RELEASE_DIR="$PWD/release" \
             KERNEL_RPM="$PWD/release/$(cat release/LINUX_CAIHONG_RPM)" \
             CAIHONG_PLATFORM_PACKAGE="$PWD/release/$(cat release/CAIHONG_PLATFORM_PACKAGE_ARMADA)" \
-            CAIHONG_NPU_PACKAGE="$PWD/release/$(cat release/CAIHONG_NPU_PACKAGE_LIB64)" \
             SPARSE_IMAGE=1 \
             scripts/package-armada-rootfs.sh \
             "release/caihong-armada-rootfs-$kernel_release.ext4.sparse.img"
@@ -324,15 +320,15 @@ jobs:
           armada_rootfs=(release/assets/caihong-armada-rootfs-*.ext4.sparse.img.zst*)
           pacman=(release/assets/linux-caihong-*-aarch64.pkg.tar.zst)
           rpm=(release/assets/linux-caihong-*-1.aarch64.rpm)
-          platform=(release/assets/caihong-platform-*.tar.zst)
-          npu=(release/assets/caihong-npu-*.tar.zst)
+          platform_pacman=(release/assets/caihong-platform-*-aarch64.pkg.tar.zst)
+          platform_rpm=(release/assets/caihong-platform-*-1.aarch64.rpm)
           (( ${#boot[@]} == 2 ))
           (( ${#arch_rootfs[@]} >= 1 ))
           (( ${#armada_rootfs[@]} >= 1 ))
           (( ${#pacman[@]} == 1 ))
           (( ${#rpm[@]} == 1 ))
-          (( ${#platform[@]} == 2 ))
-          (( ${#npu[@]} == 2 ))
+          (( ${#platform_pacman[@]} == 1 ))
+          (( ${#platform_rpm[@]} == 1 ))
           for asset in release/assets/*; do
             case ${asset##*/} in
               caihong-boot-*.img|\
@@ -340,8 +336,8 @@ jobs:
               caihong-armada-rootfs-*.ext4.sparse.img.zst*|\
               linux-caihong-*-aarch64.pkg.tar.zst|\
               linux-caihong-*-1.aarch64.rpm|\
-              caihong-platform-*.tar.zst|\
-              caihong-npu-*.tar.zst) ;;
+              caihong-platform-*-aarch64.pkg.tar.zst|\
+              caihong-platform-*-1.aarch64.rpm) ;;
               *)
                 echo "unexpected published release asset: ${asset##*/}" >&2
                 exit 1
