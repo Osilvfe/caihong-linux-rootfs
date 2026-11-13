@@ -382,9 +382,14 @@ fi
 # but never reaches WMI ready with the ath12k_wifi7 baseline used here.  Verify
 # every installed runtime payload so a stale root filesystem cannot silently
 # combine that firmware with the release kernel.
-if ! (cd -- "$target/usr/lib/firmware" &&
-	sha256sum -c "$project_dir/firmware/SHA256SUMS" >/dev/null); then
+if ! awk '$2 != "./regulatory.db" && $2 != "./regulatory.db.p7s"' \
+	"$project_dir/firmware/SHA256SUMS" |
+	(cd -- "$target/usr/lib/firmware" && sha256sum -c - >/dev/null); then
 	echo "installed runtime firmware does not match the Caihong release set" >&2
+	failed=1
+fi
+if ! chroot "$target" pacman -Qkk wireless-regdb >/dev/null; then
+	echo "distribution wireless regulatory database failed package verification" >&2
 	failed=1
 fi
 wifi_amss="$target/usr/lib/firmware/ath12k/WCN7850/hw2.0/caihong/amss.bin"

@@ -129,6 +129,11 @@ class PlatformPayloadTests(unittest.TestCase):
         self.assertIn('chroot "$target" rpm -q caihong-platform', verifier)
         self.assertNotIn('rpm --root "$target"', verifier)
 
+    def test_arch_verifies_distribution_regulatory_data_separately(self):
+        verifier = (PROJECT / 'scripts/verify-archlinuxarm-rootfs.sh').read_text()
+        self.assertIn('pacman -Qkk wireless-regdb', verifier)
+        self.assertIn('$2 != "./regulatory.db" && $2 != "./regulatory.db.p7s"', verifier)
+
     def test_no_standalone_npu_delivery_remains(self):
         for relative in ('scripts/package-archlinuxarm-rootfs.sh',
                          'scripts/package-armada-rootfs.sh',
