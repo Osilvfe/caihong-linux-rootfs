@@ -157,7 +157,7 @@ touch "$rootfs/run/caihong/offline-rootfs-build"
 chroot "$rootfs" /usr/bin/env -i \
 	HOME=/root LANG=C PATH=/usr/sbin:/usr/bin:/sbin:/bin \
 	CAIHONG_SKIP_BOOT_FLASH=1 CAIHONG_PLATFORM_IMAGE_BUILD=1 \
-	/usr/bin/dnf5 -y --allowerasing install \
+	/usr/bin/dnf5 -y install --allowerasing \
 	"/tmp/caihong-packages/${platform_package##*/}" /tmp/linux-caihong.rpm
 chroot "$rootfs" rpm -q caihong-platform
 rm -f -- "$rootfs/run/caihong/offline-rootfs-build"

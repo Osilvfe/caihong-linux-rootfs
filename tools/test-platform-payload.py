@@ -108,7 +108,8 @@ class PlatformPayloadTests(unittest.TestCase):
 
     def test_armada_image_installs_the_same_platform_payload(self):
         self.assertIn('CAIHONG_PLATFORM_IMAGE_BUILD=1', ARMADA)
-        self.assertIn('dnf5 -y --allowerasing install', ARMADA)
+        self.assertIn('dnf5 -y install --allowerasing', ARMADA)
+        self.assertNotIn('dnf5 -y --allowerasing install', ARMADA)
         for entry in (
             'rootfs/archlinuxarm/."',
             'rootfs/armada/."',
