@@ -331,7 +331,9 @@ successful 标记。
 已刷入 rootfs 的设备不需要重刷。按顺序安装对应的平台载荷和 NPU 载荷：
 
 ```sh
-sudo /usr/libexec/caihong-platform/install-caihong-platform \
+bsdtar -xOf ./caihong-platform-archlinuxarm-<version>.tar.zst \
+  usr/libexec/caihong-platform/install-caihong-platform > ./install-caihong-platform
+sudo sh ./install-caihong-platform \
   ./caihong-platform-archlinuxarm-<version>.tar.zst
 sudo pacman -U ./linux-caihong-<version>-1-aarch64.pkg.tar.zst
 sudo /usr/libexec/caihong-platform/install-caihong-platform \
@@ -345,11 +347,14 @@ sudo /usr/libexec/caihong-platform/install-caihong-platform \
 `caihong-platform-armada-<version>.tar.zst`。如需恢复上一版文件，运行
 `install-caihong-platform --rollback <component>`。
 
+首次命令请使用从新平台包中提取的安装器；旧系统预装的安装器不会执行新增的迁移步骤。
+
 平台包包含 SSC 传感器默认数据，安装时补齐 `/var/lib/caihong-ssc/root` 下缺失的
 文件，并保留已有的传感器配置和校准数据。
 
 Arch Linux ARM 安装平台更新包时还会安装、启用 Plasma Login Manager 并移除
 SDDM；管理员已选择其他显示管理器时保留原选择。全新镜像在打包时启用 PLM。
+这项检查在每次安装平台包时同步执行，不通过开机服务或定时器执行。
 
 同一个更新交付物包含内核 RPM。Armada 基于 Fedora：用事务安装器安装
 `caihong-platform-armada-<version>.tar.zst`，再用 DNF 安装

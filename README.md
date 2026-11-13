@@ -319,7 +319,9 @@ Existing rootfs installations do not need reflashing. Install the matching
 platform payload, then the matching NPU payload:
 
 ```sh
-sudo /usr/libexec/caihong-platform/install-caihong-platform \
+bsdtar -xOf ./caihong-platform-archlinuxarm-<version>.tar.zst \
+  usr/libexec/caihong-platform/install-caihong-platform > ./install-caihong-platform
+sudo sh ./install-caihong-platform \
   ./caihong-platform-archlinuxarm-<version>.tar.zst
 sudo pacman -U ./linux-caihong-<version>-1-aarch64.pkg.tar.zst
 sudo /usr/libexec/caihong-platform/install-caihong-platform \
@@ -334,6 +336,9 @@ other `/etc` files use the `.caihong-new` suffix. Legacy candidates are left
 for manual cleanup. Run `install-caihong-platform --rollback <component>`
 to restore the previous files.
 
+Use the installer extracted from the new platform package for the first
+command. An older preinstalled installer does not run the new migration steps.
+
 SSC sensor defaults are included in the platform package. Installation fills
 missing files under `/var/lib/caihong-ssc/root` and preserves existing sensor
 configuration and calibration data.
@@ -341,6 +346,8 @@ configuration and calibration data.
 On Arch Linux ARM, installing a platform update also installs and enables
 Plasma Login Manager and removes SDDM. An administrator-selected alternative
 display manager is preserved. Fresh images enable PLM during image creation.
+This check runs synchronously during each platform-package installation;
+it is not a boot-time service or timer.
 
 The kernel RPM is included in the same update bundle. Armada is Fedora-based:
 install `caihong-platform-armada-<version>.tar.zst` with the transactional

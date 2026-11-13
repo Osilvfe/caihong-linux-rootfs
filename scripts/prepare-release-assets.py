@@ -194,7 +194,9 @@ def write_release_notes(
         if not pacman_package:
             raise RuntimeError("Arch release notes require a pacman kernel package")
         update_instructions = f"""```sh
-sudo /usr/libexec/caihong-platform/install-caihong-platform \\
+bsdtar -xOf ./{platform_package.name} \\
+  usr/libexec/caihong-platform/install-caihong-platform > ./install-caihong-platform
+sudo sh ./install-caihong-platform \\
   {platform_package.name}
 sudo pacman -U ./{pacman_package.name}
 sudo /usr/libexec/caihong-platform/install-caihong-platform \\
@@ -206,7 +208,9 @@ sudo /usr/libexec/caihong-platform/install-caihong-platform \\
         update_instructions = f"""Armada is Fedora-based:
 
 ```sh
-sudo /usr/libexec/caihong-platform/install-caihong-platform \\
+bsdtar -xOf ./{platform_package.name} \\
+  usr/libexec/caihong-platform/install-caihong-platform > ./install-caihong-platform
+sudo sh ./install-caihong-platform \\
   {platform_package.name}
 sudo dnf install ./{rpm_package.name}
 sudo /usr/libexec/caihong-platform/install-caihong-platform \\
@@ -295,8 +299,9 @@ Decompressed flashable rootfs SHA-256:
 
 ## Existing rootfs updates
 
-After verifying the SHA-256 values below, install the device-only payloads
-without reflashing:
+After verifying the SHA-256 values below, extract and use the installer from
+the new platform package so its migration steps run even on older installations.
+Install the device-only payloads without reflashing:
 
 {update_instructions}
 
