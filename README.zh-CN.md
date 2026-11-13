@@ -357,6 +357,13 @@ sudo dnf upgrade --refresh && sudo dnf install --allowerasing \
 再加此选项。安装前备份重要数据，并确认包管理器提示的发行版相机、PPD 和 SDDM
 替换操作。Armada 的 `--allowerasing` 也用于解决这些平台组件的替换。
 
+两种原生包都会在安装钩子中自动进行一次旧 tar 安装迁移：按包内清单校正设备目录的
+属主和权限，将 `/etc/systemd` 中遗留的无效 `.caihong-new` 候选移到
+`/var/lib/caihong-platform/legacy-systemd-candidates.*` 保存，不覆盖生效配置、
+不改变用户禁用的服务。迁移完成后记录状态，后续升级和开机不重复执行。
+Arch 首次安装仍需上述 `--overwrite 'usr/*'`，因为 pacman 在运行包内钩子前
+就会检查旧文件冲突。
+
 二进制、固件和配置模板现在由 pacman／RPM 管理，可通过 `pacman -Q caihong-platform`
 或 `rpm -q caihong-platform` 查询。已有 `/etc` 配置及服务启用状态不覆盖；新的
 systemd 配置暂存在 `/var/lib/caihong-config-pending/caihong-platform/etc/systemd`，

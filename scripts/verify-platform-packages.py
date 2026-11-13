@@ -42,6 +42,7 @@ def verify(release, distribution, libdir, suffix):
         'usr/libexec/caihong-platform/configure-platform',
         'usr/share/caihong-platform/defaults/etc/systemd/system/caihong-keyboard.service',
         'usr/share/caihong-platform/distribution',
+        'usr/share/caihong-platform/directory-modes',
         'usr/share/caihong-npu/VERSION',
         'usr/share/caihong-ssc/root/sensors/sns_reg.conf',
         'usr/bin/cam', 'usr/bin/qcam', 'usr/bin/plasma-camera',

@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import stat
 import subprocess
 import tempfile
 import time
@@ -30,7 +31,7 @@ def pacman_package(stage, output, version):
                     'libtiff', 'gnutls', 'gstreamer', 'gst-plugins-base',
                     'libqmi', 'libqrtr-glib', 'protobuf-c', 'e2fsprogs', 'libgudev',
                     'libunwind', 'hostapd', 'dnsmasq', 'nftables', 'iw', 'iproute2',
-                    'polkit', 'upower', 'plasma-login-manager', 'wireless-regdb']
+                    'polkit', 'upower', 'rtkit', 'plasma-login-manager', 'wireless-regdb']
     reader = stage / 'usr/local/libexec/caihong-nvram-mac'
     dynamic = subprocess.run(['readelf', '-d', str(reader)], check=True,
                              capture_output=True, text=True).stdout
@@ -111,7 +112,7 @@ URL: https://github.com/Osilvfe/caihong-linux-rootfs
 BuildArch: aarch64
 Requires: bash, coreutils, findutils, systemd, util-linux
 Requires: python3, python3-gobject, bluez, NetworkManager
-Requires: kmod, e2fsprogs, hostapd, dnsmasq, nftables, iw, iproute, wireless-regdb
+Requires: kmod, e2fsprogs, hostapd, dnsmasq, nftables, iw, iproute, wireless-regdb, rtkit
 Provides: libcdsprpc.so()(64bit)
 Provides: ppd-service
 {metadata}
@@ -176,6 +177,14 @@ def main():
         shutil.copy2(PROJECT / 'packaging/caihong-platform' / name, destination)
         destination.chmod(0o755)
     (assets / 'version').write_text(arguments.version + '\n')
+    directories = []
+    for path in sorted((stage / 'usr').rglob('*')):
+        if path.is_dir() and not path.is_symlink():
+            relative = str(path.relative_to(stage))
+            if '\n' in relative or '\t' in relative:
+                raise ValueError(f'unsupported directory path: {relative}')
+            directories.append(f'{stat.S_IMODE(path.stat().st_mode):04o}\t{relative}\n')
+    (assets / 'directory-modes').write_text(''.join(directories))
     if arguments.distribution == 'archlinuxarm':
         output = release / f'caihong-platform-{version}-1-aarch64.pkg.tar.zst'
         pointer = 'CAIHONG_PLATFORM_PACKAGE_ARCHLINUXARM'

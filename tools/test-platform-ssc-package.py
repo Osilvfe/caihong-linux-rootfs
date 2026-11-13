@@ -102,7 +102,10 @@ SOURCE
                         self.assertIn('conflict = sddm\n', metadata)
                         self.assertIn('depend = plasma-login-manager\n', metadata)
                         self.assertIn('depend = wireless-regdb\n', metadata)
+                        self.assertIn('depend = rtkit\n', metadata)
                         self.assertTrue((root / '.INSTALL').is_file())
+                        self.assertIn('/usr/libexec/caihong-platform/configure-platform',
+                                      (root / '.INSTALL').read_text())
                     else:
                         self.assertTrue(archive.name.endswith('-1.aarch64.rpm'))
                         metadata = subprocess.check_output(
@@ -116,12 +119,16 @@ SOURCE
                             ['rpm', '-qp', '--requires', str(archive)], text=True))
                         self.assertIn('wireless-regdb', subprocess.check_output(
                             ['rpm', '-qp', '--requires', str(archive)], text=True))
+                        self.assertIn('rtkit', subprocess.check_output(
+                            ['rpm', '-qp', '--requires', str(archive)], text=True))
                         self.assertIn('tuned-ppd', subprocess.check_output(
                             ['rpm', '-qp', '--conflicts', str(archive)], text=True))
                         self.assertIn('tuned-ppd', subprocess.check_output(
                             ['rpm', '-qp', '--obsoletes', str(archive)], text=True))
                         self.assertIn('ppd-service', subprocess.check_output(
                             ['rpm', '-qp', '--provides', str(archive)], text=True))
+                        self.assertIn('/usr/libexec/caihong-platform/configure-platform',
+                                      subprocess.check_output(['rpm', '-qp', '--scripts', str(archive)], text=True))
                         with subprocess.Popen(['rpm2cpio', str(archive)], stdout=subprocess.PIPE) as source:
                             subprocess.run(['bsdtar', '-xf', '-', '-C', str(root)],
                                            stdin=source.stdout, check=True)
@@ -133,6 +140,8 @@ SOURCE
                     self.assertFalse((root / 'usr/libexec/caihong-platform/install-caihong-platform').exists())
                     self.assertEqual((root / f'usr/{libdir}/caihong-npu/qnn/libQnnHtp.so').read_text(), 'NPU runtime\n')
                     self.assertEqual((root / 'usr/share/caihong-npu/libdir').read_text(), libdir + '\n')
+                    self.assertIn('0755\tusr/share/caihong-ssc/root\n',
+                                  (root / 'usr/share/caihong-platform/directory-modes').read_text())
                     environment.update(CAIHONG_PLATFORM_ROOT=str(root), CAIHONG_PLATFORM_IMAGE_BUILD='1')
                     subprocess.run(['sh', str(root / 'usr/libexec/caihong-platform/configure-platform')],
                                    env=environment, check=True)
@@ -142,6 +151,31 @@ SOURCE
                         for prefix in ('usr/share/caihong-ssc/root', 'var/lib/caihong-ssc/root'):
                             self.assertEqual((root / prefix / relative).read_bytes(),
                                              (bundle / 'root' / relative).read_bytes())
+                    legacy = root / 'var/lib/caihong-packages/caihong-platform/version'
+                    legacy.parent.mkdir(parents=True)
+                    legacy.write_text('legacy\n')
+                    directory = root / 'usr/share/caihong-ssc/root'
+                    directory.chmod(0o700)
+                    candidate = root / 'etc/systemd/system/caihong-legacy.service.caihong-new'
+                    candidate.write_text('legacy candidate\n')
+                    fakebin = work / ('tools-' + distribution)
+                    fakebin.mkdir()
+                    (fakebin / 'chown').write_text('#!/bin/sh\nexit 0\n')
+                    (fakebin / 'chown').chmod(0o755)
+                    environment.update(CAIHONG_PLATFORM_ROOT=str(root), CAIHONG_PLATFORM_IMAGE_BUILD='0',
+                                       PATH=str(fakebin) + os.pathsep + os.environ['PATH'])
+                    subprocess.run(['sh', str(root / 'usr/libexec/caihong-platform/configure-platform')],
+                                   env=environment, check=True)
+                    self.assertEqual(directory.stat().st_mode & 0o777, 0o755)
+                    self.assertFalse(candidate.exists())
+                    self.assertTrue((root / 'var/lib/caihong-platform/legacy-native-migration-v1').is_file())
+                    directory.chmod(0o700)
+                    subprocess.run(['sh', str(root / 'usr/libexec/caihong-platform/configure-platform')],
+                                   env=environment, check=True)
+                    self.assertEqual(directory.stat().st_mode & 0o777, 0o700)
+                    for name in ('CAIHONG_PLATFORM_ROOT', 'CAIHONG_PLATFORM_IMAGE_BUILD'):
+                        environment.pop(name)
+                    environment['PATH'] = os.environ['PATH']
 
 
 if __name__ == '__main__':

@@ -17,6 +17,42 @@ if [ ! -e "$state/initialized" ] &&
 fi
 mkdir -p "$state"
 
+if [ -e "$root/var/lib/caihong-packages/caihong-platform/version" ] &&
+	[ ! -e "$state/legacy-native-migration-v1" ]; then
+	if [ ! -r "$assets/directory-modes" ]; then
+		echo "caihong-platform: directory mode manifest is missing" >&2
+		exit 1
+	fi
+	while IFS="$(printf '\t')" read -r mode relative; do
+		case $mode in
+			''|*[!0-7]*) echo "caihong-platform: invalid directory mode" >&2; exit 1 ;;
+		esac
+		case $relative in
+			usr/*) ;;
+			*) echo "caihong-platform: invalid directory path" >&2; exit 1 ;;
+		esac
+		case /$relative/ in
+			*/../*|*/./*) echo "caihong-platform: invalid directory path" >&2; exit 1 ;;
+		esac
+		destination=${root%/}/$relative
+		if [ -d "$destination" ] && [ ! -L "$destination" ] &&
+			[ "$(realpath -- "$destination")" = "$destination" ]; then
+			chown 0:0 -- "$destination"
+			chmod "$mode" -- "$destination"
+		fi
+	done < "$assets/directory-modes"
+	if [ -d "$root/etc/systemd" ]; then
+		archive=$(mktemp -d "$state/legacy-systemd-candidates.XXXXXX")
+		find "$root/etc/systemd" -name '*.caihong-new' -print |
+		while IFS= read -r source; do
+			destination=$archive/${source#"$root/"}
+			mkdir -p "$(dirname -- "$destination")"
+			mv -- "$source" "$destination"
+		done
+	fi
+	touch "$state/legacy-native-migration-v1"
+fi
+
 if [ -d "$assets/defaults/etc" ]; then
 	find "$assets/defaults/etc" \( -type f -o -type l \) -print |
 	while IFS= read -r source; do

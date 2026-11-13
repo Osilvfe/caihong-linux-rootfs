@@ -350,6 +350,15 @@ Back up important data and review package-manager prompts for replacing the
 distribution camera stack, PPD and SDDM. Armada's `--allowerasing` allows the
 corresponding platform-component replacements.
 
+Both native packages automatically perform a one-time legacy tar migration in
+their installation hooks: restore packaged directory ownership and permissions,
+and archive obsolete `.caihong-new` files from `/etc/systemd` under
+`/var/lib/caihong-platform/legacy-systemd-candidates.*`. Active configuration and
+disabled services are preserved. A completion marker prevents this migration
+from repeating on later upgrades or at boot. Arch still needs the initial
+`--overwrite 'usr/*'` because pacman checks file conflicts before running package
+hooks.
+
 Binaries, firmware and configuration templates are now tracked by pacman/RPM.
 Check the installed version with `pacman -Q caihong-platform` or
 `rpm -q caihong-platform`. Existing `/etc` configuration and service enablement
