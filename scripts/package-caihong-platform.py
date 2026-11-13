@@ -77,6 +77,16 @@ def rpm_package(stage, output, version):
                              for name in conflicts)
         metadata += '\n' + '\n'.join(f'Obsoletes: {name}' for name in conflicts)
         metadata += '\n' + '\n'.join(f'Conflicts: {name}' for name in conflicts)
+        private_sonames = set()
+        for library in (stage / 'usr/lib/caihong-adbd').glob('*.so*'):
+            if library.is_symlink() or not library.is_file():
+                continue
+            dynamic = subprocess.check_output(['readelf', '-d', str(library)], text=True)
+            private_sonames.update(re.findall(r'\(SONAME\).*\[([^\]]+)\]', dynamic))
+        if private_sonames:
+            pattern = '|'.join(re.escape(name).replace(r'\.', '[.]')
+                               for name in sorted(private_sonames))
+            metadata += f'\n%global __requires_exclude ^({pattern})([(].*[)])?$'
         files = []
         for path in sorted(stage.rglob('*')):
             if path.is_symlink() or path.is_file():
@@ -105,7 +115,7 @@ Provides: libcdsprpc.so()(64bit)
 {metadata}
 %global _build_id_links none
 %global __os_install_post %{{nil}}
-%global __requires_exclude_from ^/usr/(share/caihong-npu/dsp|share/caihong-ssc/root|lib/dsp|lib/firmware|lib/caihong-adbd)/.*$
+%global __requires_exclude_from ^/usr/(share/caihong-npu/dsp|share/caihong-ssc/root|lib/dsp|lib/firmware)/.*$
 %global __provides_exclude_from ^/usr/(share/caihong-npu/dsp|share/caihong-ssc/root|lib/dsp|lib/firmware|lib/caihong-adbd)/.*$
 
 %description

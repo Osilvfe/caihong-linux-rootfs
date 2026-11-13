@@ -28,7 +28,7 @@ class NativePlatformPackageTests(unittest.TestCase):
                 'caihong-build-root.sh', 'install-caihong-toolbox-rootfs.sh',
                 'install-caihong-vaapi-stage.sh', 'install-caihong-libcamera-stage.sh',
                 'install-caihong-plasma-camera-stage.sh', 'install-caihong-qbootctl-stage.sh',
-                'install-caihong-ppd-stage.sh', 'install-caihong-adbd.sh',
+                'install-caihong-ppd-stage.sh',
             ):
                 helper = scripts / name
                 helper.write_text('#!/bin/sh\nexit 0\n')
@@ -37,6 +37,21 @@ class NativePlatformPackageTests(unittest.TestCase):
             utilities.write_text('#!/bin/sh\nmkdir -p "$1/usr/local/libexec"\n'
                                  'cp /usr/bin/true "$1/usr/local/libexec/caihong-nvram-mac"\n')
             utilities.chmod(0o755)
+            adbd = scripts / 'install-caihong-adbd.sh'
+            adbd.write_text('''#!/bin/sh
+set -eu
+mkdir -p "$1/usr/lib/caihong-adbd" "$1/usr/bin"
+cc -shared -fPIC -Wl,-soname,libbase.so.0 -x c - \\
+    -o "$1/usr/lib/caihong-adbd/libbase.so.0" <<'SOURCE'
+int caihong_private_test(void) { return 0; }
+SOURCE
+cc -x c - -x none "$1/usr/lib/caihong-adbd/libbase.so.0" \\
+    -o "$1/usr/bin/adbd" <<'SOURCE'
+int caihong_private_test(void);
+int main(void) { return caihong_private_test(); }
+SOURCE
+''')
+            adbd.chmod(0o755)
             npu = scripts / 'install-caihong-npu.sh'
             npu.write_text('#!/bin/sh\nmkdir -p "$2/usr/share/caihong-npu" "$2/usr/$3/caihong-npu/qnn"\n'
                            'printf "QAIRT/QNN test\\n" > "$2/usr/share/caihong-npu/VERSION"\n'
@@ -90,6 +105,12 @@ class NativePlatformPackageTests(unittest.TestCase):
                         metadata = subprocess.check_output(
                             ['rpm', '-qp', '--queryformat', '%{NAME} %{ARCH}', str(archive)], text=True)
                         self.assertEqual(metadata, 'caihong-platform aarch64')
+                        for query in ('--requires', '--provides'):
+                            dependencies = subprocess.check_output(
+                                ['rpm', '-qp', query, str(archive)], text=True)
+                            self.assertNotIn('libbase.so.0', dependencies)
+                        self.assertIn('libc.so.6', subprocess.check_output(
+                            ['rpm', '-qp', '--requires', str(archive)], text=True))
                         with subprocess.Popen(['rpm2cpio', str(archive)], stdout=subprocess.PIPE) as source:
                             subprocess.run(['bsdtar', '-xf', '-', '-C', str(root)],
                                            stdin=source.stdout, check=True)
