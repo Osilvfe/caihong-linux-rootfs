@@ -124,6 +124,11 @@ class PlatformPayloadTests(unittest.TestCase):
     def test_armada_requires_a_platform_package(self):
         self.assertIn('missing Armada platform package pointer', ARMADA)
 
+    def test_armada_verifier_uses_the_target_rpm_database(self):
+        verifier = (PROJECT / 'scripts/verify-armada-rootfs.sh').read_text()
+        self.assertIn('chroot "$target" rpm -q caihong-platform', verifier)
+        self.assertNotIn('rpm --root "$target"', verifier)
+
     def test_no_standalone_npu_delivery_remains(self):
         for relative in ('scripts/package-archlinuxarm-rootfs.sh',
                          'scripts/package-armada-rootfs.sh',

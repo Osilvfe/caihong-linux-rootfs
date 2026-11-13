@@ -12,7 +12,10 @@ if [[ -z $target || ! -d $target ]]; then
 fi
 target=$(cd -- "$target" && pwd)
 failed=0
-rpm --root "$target" -q caihong-platform >/dev/null || failed=1
+if ! chroot "$target" rpm -q caihong-platform >/dev/null; then
+	echo "native caihong-platform RPM is not registered in Armada" >&2
+	failed=1
+fi
 
 missing()
 {
@@ -176,7 +179,7 @@ for path in "${obsolete_camera_paths[@]}"; do
 done
 
 for package in libcamera libcamera-ipa libcamera-tools; do
-	if rpm --root "$target" -q "$package" >/dev/null 2>&1; then
+	if chroot "$target" rpm -q "$package" >/dev/null 2>&1; then
 		echo "obsolete distribution camera package remains: $package" >&2
 		failed=1
 	fi
