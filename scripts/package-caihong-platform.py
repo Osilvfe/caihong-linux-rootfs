@@ -9,6 +9,8 @@ import subprocess
 import tempfile
 import time
 
+from platform_runtime import RUNTIME_PACKAGES
+
 
 PROJECT = Path(__file__).resolve().parents[1]
 COMPONENTS = {
@@ -22,16 +24,7 @@ COMPONENTS = {
 
 
 def pacman_package(stage, output, version):
-    dependencies = ['bash', 'coreutils', 'findutils', 'systemd', 'util-linux', 'kmod',
-                    'glibc', 'openssl', 'bluez', 'bluez-utils', 'networkmanager',
-                    'python', 'python-gobject', 'pyside6', 'kirigami', 'kconfig',
-                    'kcoreaddons', 'ki18n', 'qt6-base', 'qt6-declarative',
-                    'qt6-multimedia', 'qt6-sensors', 'qt6-svg', 'exiv2',
-                    'libva', 'libdrm', 'libyaml', 'libevent', 'libjpeg-turbo',
-                    'libtiff', 'gnutls', 'gstreamer', 'gst-plugins-base',
-                    'libqmi', 'libqrtr-glib', 'protobuf-c', 'e2fsprogs', 'libgudev',
-                    'libunwind', 'hostapd', 'dnsmasq', 'nftables', 'iw', 'iproute2',
-                    'polkit', 'upower', 'rtkit', 'plasma-login-manager', 'wireless-regdb']
+    dependencies = list(RUNTIME_PACKAGES['archlinuxarm'])
     reader = stage / 'usr/local/libexec/caihong-nvram-mac'
     dynamic = subprocess.run(['readelf', '-d', str(reader)], check=True,
                              capture_output=True, text=True).stdout
@@ -103,6 +96,7 @@ def rpm_package(stage, output, version):
                                      'usr/local/lib', 'usr/local/libexec', 'usr/libexec'):
                     files.append('%dir /' + relative)
         spec = top / 'SPECS/caihong-platform.spec'
+        requirements = '\n'.join(f'Requires: {name}' for name in RUNTIME_PACKAGES['armada'])
         spec.write_text(f'''Name: caihong-platform
 Version: {version}
 Release: 1
@@ -110,9 +104,7 @@ Summary: Caihong device support including NPU runtime
 License: LicenseRef-Caihong-Bundle
 URL: https://github.com/Osilvfe/caihong-linux-rootfs
 BuildArch: aarch64
-Requires: bash, coreutils, findutils, systemd, util-linux
-Requires: python3, python3-gobject, bluez, NetworkManager
-Requires: kmod, e2fsprogs, hostapd, dnsmasq, nftables, iw, iproute, wireless-regdb, rtkit
+{requirements}
 Provides: libcdsprpc.so()(64bit)
 Provides: ppd-service
 {metadata}

@@ -93,10 +93,8 @@ fi
 if [ "$distribution" = archlinuxarm ] || [ "$distribution" = armada ]; then
 	"$project_dir/scripts/caihong-build-root.sh" prepare \
 		"$build_root" "$distribution"
-	if [ "$distribution" = archlinuxarm ]; then
-		CAIHONG_BUILD_ROOT="$build_root" \
-		"$project_dir/scripts/install-caihong-toolbox-rootfs.sh" "$stage"
-	fi
+	CAIHONG_BUILD_ROOT="$build_root" \
+	"$project_dir/scripts/install-caihong-toolbox-rootfs.sh" "$stage"
 	CAIHONG_BUILD_ROOT="$build_root" LIBDIR="$libdir" \
 	"$project_dir/scripts/install-caihong-vaapi-stage.sh" "$stage"
 	CAIHONG_BUILD_ROOT="$build_root" LIBCAMERA_LIBDIR="$libdir" \
@@ -109,7 +107,6 @@ if [ "$distribution" = archlinuxarm ] || [ "$distribution" = armada ]; then
 	"$project_dir/scripts/install-caihong-utilities-stage.sh" "$stage"
 	CAIHONG_BUILD_ROOT="$build_root" \
 	"$project_dir/scripts/install-caihong-ppd-stage.sh" "$stage"
-	"$project_dir/scripts/caihong-build-root.sh" cleanup "$build_root"
 fi
 
 (
@@ -134,11 +131,14 @@ FORCE=1 "$project_dir/scripts/ssc/install-rootfs.sh" \
 	"$project_dir/firmware-assets/caihong-ssc" "$stage" >/dev/null
 install -d -m 0755 "$stage/usr/share/caihong-ssc"
 mv -- "$stage/var/lib/caihong-ssc/root" "$stage/usr/share/caihong-ssc/root"
+CAIHONG_BUILD_ROOT="$build_root" \
+	"$project_dir/scripts/install-caihong-ssc-stage.sh" "$stage"
 
 "$project_dir/scripts/install-caihong-npu.sh" \
 	"$project_dir/firmware-assets/caihong-npu" "$stage" "$libdir"
 printf '%s\n' "$libdir" > "$stage/usr/share/caihong-npu/libdir"
 install -d -m 0755 "$stage/usr/share/caihong-platform"
+"$project_dir/scripts/caihong-build-root.sh" cleanup "$build_root"
 printf '%s\n' "$distribution" > "$stage/usr/share/caihong-platform/distribution"
 [ -z "$kernel_release" ] || printf '%s\n' "$kernel_release" \
 	> "$stage/usr/share/caihong-platform/kernel-release"

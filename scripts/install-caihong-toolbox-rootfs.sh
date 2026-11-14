@@ -43,7 +43,12 @@ if [[ -d $source_tree/.git ]]; then
 	fi
 	source_commit=$(git -C "$source_tree" rev-parse --verify HEAD)
 else
-	source_commit=unknown
+	resolved="$project_dir/build/dependencies.resolved.env"
+	source_commit=$(sed -n 's/^TOOLBOX_COMMIT=//p' "$resolved" 2>/dev/null | tail -n 1)
+	[[ -n $source_commit ]] || {
+		echo "cannot determine the Caihong Toolbox source revision" >&2
+		exit 1
+	}
 fi
 version=$(sed -n 's/^version = "\(.*\)"$/\1/p' "$source_tree/pyproject.toml" | head -n 1)
 [[ -n $version ]] || version=unknown

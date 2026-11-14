@@ -29,6 +29,7 @@ class PlatformPayloadTests(unittest.TestCase):
             'install-caihong-qbootctl-stage.sh',
             'install-caihong-utilities-stage.sh',
             'install-caihong-ppd-stage.sh',
+            'install-caihong-ssc-stage.sh',
             'install-caihong-npu.sh',
         ):
             self.assertIn(script, PLATFORM)
@@ -91,11 +92,11 @@ class PlatformPayloadTests(unittest.TestCase):
         self.assertIn('DISTRIBUTION=armada LIBDIR=lib64', release)
         self.assertIn('DISTRIBUTION=armada LIBDIR=lib64', kernel)
 
-    def test_armada_payload_has_no_arch_only_toolbox_or_sudoers(self):
+    def test_both_payloads_include_toolbox_without_arch_sudoers_on_armada(self):
         self.assertIn('rm -f -- "$stage/etc/sudoers.d/10-alarm"',
                       PLATFORM)
         branch = PLATFORM.split('if [ "$distribution" = archlinuxarm ] ||', 1)[1]
-        self.assertIn('if [ "$distribution" = archlinuxarm ]; then', branch)
+        self.assertNotIn('if [ "$distribution" = archlinuxarm ]; then', branch)
         self.assertIn('install-caihong-toolbox-rootfs.sh', branch)
 
     def test_platform_jobs_have_the_build_root_dependencies(self):

@@ -47,9 +47,15 @@ development release for this device; review the status table before installing.
   is both the incremental update and the only device-content source installed
   into a freshly built rootfs image.
 - `caihong-platform-<version>-1.aarch64.rpm`: the native Armada platform RPM with
-  the same core hardware components and NPU runtime, built for Fedora's `lib64`
-  layout. It currently does not include Caihong Toolbox. No standalone NPU archive
-  is published.
+  the same core hardware components, Caihong Toolbox and NPU runtime, built for
+  Fedora's `lib64` layout. No standalone NPU archive is published.
+
+Both platform packages declare the audio, sensor, Qt GUI and PipeWire camera
+runtime dependencies for pacman/DNF to install. Device firmware, BPS tables for
+both full-resolution and binned camera modes, Toolbox and board configuration
+are delivered by `caihong-platform` itself. Builds check both native packages'
+file manifests and runtime dependencies; rootfs images do not add device files
+through a separate path.
 
 The Release description records the SHA-256 digests of every asset, the
 reconstructed zstd stream and the decompressed flashable image, together with

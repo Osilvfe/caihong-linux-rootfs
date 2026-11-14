@@ -24,6 +24,7 @@ jobs:
           python3 -m compileall -q scripts
           python3 tools/test-rootfs-camera-policy.py
           python3 tools/test-platform-payload.py
+          python3 tools/test-platform-manifest.py
           python3 tools/test-platform-ssc-package.py
           python3 tools/test-release-packages.py
           python3 tools/test-build-root-resolver.py
@@ -53,6 +54,8 @@ jobs:
             scripts/install-caihong-qbootctl-stage.sh \
             scripts/install-caihong-utilities-stage.sh \
             scripts/install-caihong-ppd-stage.sh \
+            scripts/install-caihong-ssc-stage.sh \
+            packaging/libssc/run-regression.sh \
             scripts/package-archlinuxarm-rootfs.sh \
             scripts/package-armada-rootfs.sh \
             scripts/verify-caihong-update-packages.sh \

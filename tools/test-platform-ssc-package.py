@@ -19,7 +19,8 @@ class NativePlatformPackageTests(unittest.TestCase):
             project = work / 'project'
             scripts = project / 'scripts'
             scripts.mkdir(parents=True)
-            for name in ('build-caihong-platform-package.sh', 'package-caihong-platform.py'):
+            for name in ('build-caihong-platform-package.sh', 'package-caihong-platform.py',
+                         'platform_runtime.py'):
                 shutil.copy2(PROJECT / 'scripts' / name, scripts)
             for directory in ('scripts/ssc', 'packaging/caihong-platform',
                               'rootfs/archlinuxarm', 'rootfs/armada'):
@@ -29,6 +30,7 @@ class NativePlatformPackageTests(unittest.TestCase):
                 'install-caihong-vaapi-stage.sh', 'install-caihong-libcamera-stage.sh',
                 'install-caihong-plasma-camera-stage.sh', 'install-caihong-qbootctl-stage.sh',
                 'install-caihong-ppd-stage.sh',
+                'install-caihong-ssc-stage.sh',
             ):
                 helper = scripts / name
                 helper.write_text('#!/bin/sh\nexit 0\n')
@@ -37,6 +39,19 @@ class NativePlatformPackageTests(unittest.TestCase):
             utilities.write_text('#!/bin/sh\nmkdir -p "$1/usr/local/libexec"\n'
                                  'cp /usr/bin/true "$1/usr/local/libexec/caihong-nvram-mac"\n')
             utilities.chmod(0o755)
+            toolbox = scripts / 'install-caihong-toolbox-rootfs.sh'
+            toolbox.write_text('#!/bin/sh\nset -eu\n'
+                               'mkdir -p "$1/usr/bin" "$1/usr/lib/caihong-toolbox"\n'
+                               'printf toolbox > "$1/usr/bin/caihong-toolbox"\n'
+                               'printf service > "$1/usr/lib/caihong-toolbox/caihong-toolbox-service"\n')
+            toolbox.chmod(0o755)
+            ssc = scripts / 'install-caihong-ssc-stage.sh'
+            ssc.write_text('#!/bin/sh\nset -eu\n'
+                           'test -f "$1/usr/local/lib/caihong-ssc/libssc.so.2"\n'
+                           'printf patched-libssc > "$1/usr/local/lib/caihong-ssc/libssc.so.2"\n'
+                           'mkdir -p "$1/usr/share/caihong"\n'
+                           'printf per-operation-handler > "$1/usr/share/caihong/ssc-build-info"\n')
+            ssc.chmod(0o755)
             adbd = scripts / 'install-caihong-adbd.sh'
             adbd.write_text('''#!/bin/sh
 set -eu
@@ -68,6 +83,9 @@ SOURCE
             (project / 'firmware/SHA256SUMS').write_text(
                 hashlib.sha256(firmware.read_bytes()).hexdigest() +
                 '  qcom/sm8650/SM8650-MTP-tplg.bin\n')
+            for size in ('1632x1224', '2104x1560'):
+                name = f'bps-striping-bggr10-nv12-{size}.bin'
+                shutil.copy2(PROJECT / 'firmware/qcom/sm8650' / name, firmware.parent / name)
             bundle = project / 'firmware-assets/caihong-ssc'
             defaults = ('sensors/sns_reg.conf', 'sensors/persist/registry/test',
                         'dsp/adsp/test.so', 'socinfo/soc_id')
@@ -103,6 +121,9 @@ SOURCE
                         self.assertIn('depend = plasma-login-manager\n', metadata)
                         self.assertIn('depend = wireless-regdb\n', metadata)
                         self.assertIn('depend = rtkit\n', metadata)
+                        for dependency in ('pipewire-libcamera', 'pipewire-audio',
+                                           'alsa-utils', 'iio-sensor-proxy', 'v4l-utils'):
+                            self.assertIn(f'depend = {dependency}\n', metadata)
                         self.assertTrue((root / '.INSTALL').is_file())
                         self.assertIn('/usr/libexec/caihong-platform/configure-platform',
                                       (root / '.INSTALL').read_text())
@@ -127,6 +148,11 @@ SOURCE
                             ['rpm', '-qp', '--obsoletes', str(archive)], text=True))
                         self.assertIn('ppd-service', subprocess.check_output(
                             ['rpm', '-qp', '--provides', str(archive)], text=True))
+                        dependencies = subprocess.check_output(
+                            ['rpm', '-qp', '--requires', str(archive)], text=True).splitlines()
+                        for dependency in ('python3-pyside6', 'pipewire-plugin-libcamera',
+                                           'pipewire-utils', 'alsa-utils', 'iio-sensor-proxy', 'v4l-utils'):
+                            self.assertIn(dependency, dependencies)
                         self.assertIn('/usr/libexec/caihong-platform/configure-platform',
                                       subprocess.check_output(['rpm', '-qp', '--scripts', str(archive)], text=True))
                         with subprocess.Popen(['rpm2cpio', str(archive)], stdout=subprocess.PIPE) as source:
@@ -135,6 +161,16 @@ SOURCE
                             source.stdout.close()
                             self.assertEqual(source.wait(), 0)
                     self.assertFalse((root / 'etc').exists())
+                    self.assertEqual((root / 'usr/local/lib/caihong-ssc/libssc.so.2').read_text(),
+                                     'patched-libssc')
+                    self.assertEqual((root / 'usr/share/caihong/ssc-build-info').read_text(),
+                                     'per-operation-handler')
+                    self.assertEqual((root / 'usr/bin/caihong-toolbox').read_text(), 'toolbox')
+                    self.assertEqual((root / 'usr/lib/caihong-toolbox/caihong-toolbox-service').read_text(), 'service')
+                    for size in ('1632x1224', '2104x1560'):
+                        relative = f'firmware/qcom/sm8650/bps-striping-bggr10-nv12-{size}.bin'
+                        self.assertEqual((root / 'usr/lib' / relative).read_bytes(),
+                                         (PROJECT / relative).read_bytes())
                     for name in ('regulatory.db', 'regulatory.db.p7s'):
                         self.assertFalse((root / 'usr/lib/firmware' / name).exists())
                     self.assertFalse((root / 'usr/libexec/caihong-platform/install-caihong-platform').exists())

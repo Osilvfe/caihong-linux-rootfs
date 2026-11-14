@@ -1,0 +1,99 @@
+Subject: [PATCH] sensor: keep report handlers private to each operation
+
+Concurrent opens must disconnect their own report listener. A shared handler
+ID can remove another open's listener and leave a freed context connected.
+
+diff --git a/src/libssc-sensor.c b/src/libssc-sensor.c
+index 2cf686f..c2fce25 100644
+--- a/src/libssc-sensor.c
++++ b/src/libssc-sensor.c
+@@ -43,6 +43,7 @@ static GParamSpec *properties[N_PROPERTIES];
+ typedef struct {
+ 	GTask *task;
+ 	SSCSensor *sensor;
++	gulong report_id;
+ } ReportReceivedContext;
+ 
+ typedef struct _SSCSensorPrivate {
+@@ -57,7 +58,6 @@ typedef struct _SSCSensorPrivate {
+ 	gfloat mount_matrix[3][3];
+ 
+ 	SSCClient *client;
+-	guint report_id;
+ 	gboolean attr_populated;
+ 	gboolean service_available;
+ 	guint service_retries;
+@@ -236,7 +236,7 @@ sensor_open (SSCSensor *self, GCancellable *cancellable, GAsyncReadyCallback cal
+ 	ctx->sensor = self;
+ 
+ 	/* Start listening for report signals */
+-	priv->report_id = g_signal_connect (priv->client,
++	ctx->report_id = g_signal_connect (priv->client,
+ 			"report",
+ 			G_CALLBACK (report_received),
+ 			ctx);
+@@ -310,8 +310,8 @@ report_received (SSCClient *self, guint32 msg_id, guint64 uid_high, guint64 uid_
+ 
+ 			/* Fail to discover when service is not available after 100s */
+ 			if (priv->service_retries >= MAX_RETRIES) {
+-				g_signal_handler_disconnect (self, priv->report_id);
+-				priv->report_id = 0;
++				g_signal_handler_disconnect (self, ctx->report_id);
++				ctx->report_id = 0;
+ 
+ 				g_set_error (&error, ssc_sensor_error_quark(), SSC_SENSOR_ERROR_NO_SERVICE,
+ 					     "Sensor service unavailable");
+@@ -351,8 +351,8 @@ report_received (SSCClient *self, guint32 msg_id, guint64 uid_high, guint64 uid_
+ 			g_debug ("No '%s' sensor available", priv->data_type);
+ 			ssc_suid_response__free_unpacked (suid_msg, NULL);
+ 
+-			g_signal_handler_disconnect (self, priv->report_id);
+-			priv->report_id = 0;
++			g_signal_handler_disconnect (self, ctx->report_id);
++			ctx->report_id = 0;
+ 
+ 			g_task_return_boolean (ctx->task, FALSE);
+ 			g_clear_object (&ctx->task);
+@@ -440,8 +440,8 @@ report_received (SSCClient *self, guint32 msg_id, guint64 uid_high, guint64 uid_
+ 
+ 		/* Sensor initialized, complete task and stop listening */
+ 		if (ctx->task) {
+-			g_signal_handler_disconnect (self, priv->report_id);
+-			priv->report_id = 0;
++			g_signal_handler_disconnect (self, ctx->report_id);
++			ctx->report_id = 0;
+ 			g_task_return_boolean (ctx->task, attributes_populated);
+ 			g_clear_object (&ctx->task);
+ 			g_slice_free (ReportReceivedContext, ctx);
+@@ -468,8 +468,8 @@ report_received (SSCClient *self, guint32 msg_id, guint64 uid_high, guint64 uid_
+ 
+ 		/* Configuration updated, complete task and stop listening */
+ 		if (ctx->task) {
+-			g_signal_handler_disconnect (self, priv->report_id);
+-			priv->report_id = 0;
++			g_signal_handler_disconnect (self, ctx->report_id);
++			ctx->report_id = 0;
+ 			g_task_return_boolean (ctx->task, TRUE);
+ 			g_clear_object (&ctx->task);
+ 			g_slice_free (ReportReceivedContext, ctx);
+@@ -487,8 +487,8 @@ report_received (SSCClient *self, guint32 msg_id, guint64 uid_high, guint64 uid_
+ 		g_debug ("Measurement received for '%s' sensor (%" G_GUINT64_FORMAT " %" G_GUINT64_FORMAT "), assuming enabled", priv->data_type, priv->uid_high, priv->uid_low);
+ 
+ 		if (ctx->task) {
+-			g_signal_handler_disconnect (self, priv->report_id);
+-			priv->report_id = 0;
++			g_signal_handler_disconnect (self, ctx->report_id);
++			ctx->report_id = 0;
+ 			g_task_return_boolean (ctx->task, TRUE);
+ 			g_clear_object (&ctx->task);
+ 			g_slice_free (ReportReceivedContext, ctx);
+@@ -675,7 +675,7 @@ client_ready (SSCClient *client, GAsyncResult *result, gpointer user_data)
+ 	ctx->sensor = self;
+ 
+ 	/* Start listening for report signals */
+-	priv->report_id = g_signal_connect (priv->client,
++	ctx->report_id = g_signal_connect (priv->client,
+ 			"report",
+ 			G_CALLBACK (report_received),
+ 			ctx);
+

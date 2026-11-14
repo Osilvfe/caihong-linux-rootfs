@@ -51,6 +51,15 @@ required_paths=(
 	usr/bin/cam
 	usr/bin/qcam
 	usr/bin/plasma-camera
+	usr/bin/caihong-toolbox
+	usr/lib/caihong-toolbox/caihong_toolbox/gui.py
+	usr/lib/systemd/system/caihong-toolbox.service
+	usr/share/caihong/toolbox-build-info
+	usr/share/wireplumber/wireplumber.conf.d/90-caihong-camera.conf
+	usr/lib64/spa-0.2/libcamera/libspa-libcamera.so
+	usr/bin/pw-play
+	usr/bin/pw-record
+	usr/bin/v4l2-ctl
 	usr/lib64/gstreamer-1.0/libgstlibcamera.so
 	usr/lib64/libcamera-base.so.0.7.2
 	usr/lib64/libcamera.so.0.7
@@ -106,6 +115,8 @@ required_paths=(
 	usr/local/libexec/caihong-ssc/iio-sensor-proxy
 	usr/local/lib/caihong-ssc/libhexagonrpc.so.0.5
 	usr/local/lib/caihong-ssc/libssc.so.2
+	usr/share/caihong/ssc-build-info
+	usr/share/licenses/caihong-ssc/LICENSE.libssc
 	var/lib/caihong-ssc/root/sensors/sns_reg.conf
 	usr/lib/systemd/system/iio-sensor-proxy.service.d/caihong-ssc.conf
 	usr/lib/tmpfiles.d/caihong-alsa.conf
@@ -117,6 +128,8 @@ required_paths=(
 	usr/lib/firmware/qcom/sm8650/CAMERA_ICP.mbn
 	usr/lib/firmware/qcom/sm8650/SM8650-MTP-tplg.bin
 	usr/lib/firmware/qcom/sm8650/Oneplus/caihong/vpu33_4v.mbn
+	usr/lib/firmware/qcom/sm8650/bps-striping-bggr10-nv12-1632x1224.bin
+	usr/lib/firmware/qcom/sm8650/bps-striping-bggr10-nv12-2104x1560.bin
 	usr/lib/firmware/qcom/sm8650/bps-striping-bggr10-nv12-3264x2448.bin
 	usr/lib/firmware/qcom/sm8650/bps-striping-bggr10-nv12-4208x3120.bin
 	usr/lib/firmware/qcom/sm8650/bps-striping-bggr10-nv12-640x480.bin

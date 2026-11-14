@@ -181,6 +181,10 @@ case $distribution in
 			glib2
 			glib2-devel
 			libgudev
+			libqmi
+			libqrtr-glib
+			protobuf
+			protobuf-c
 			polkit
 			upower
 			gstreamer
@@ -262,6 +266,12 @@ case $distribution in
 			qt6-qtsvg-devel
 			mesa-libGL-devel
 			libgudev-devel
+			libqmi-devel
+			libqrtr-glib-devel
+			protobuf-c-devel
+			protobuf-c-compiler
+			protobuf-compiler
+			python3-devel
 			polkit-devel
 			upower-devel
 			patch

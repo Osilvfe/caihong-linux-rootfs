@@ -66,6 +66,8 @@ if [ "$dependency_scope" = release ]; then
 fi
 checkout TOOLBOX "$TOOLBOX_REF" \
 	"$project_dir/external/caihong-toolbox" "$TOOLBOX_REPOSITORY"
+checkout LIBSSC "$LIBSSC_REF" \
+	"$project_dir/external/libssc" "$LIBSSC_REPOSITORY"
 # The incremental platform package also embeds the VA-API driver, and the
 # kernel-only workflow builds that package without the rootfs dependencies.
 checkout QCOM_VA "$QCOM_VA_REF" \
