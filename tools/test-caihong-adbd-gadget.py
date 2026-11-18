@@ -50,6 +50,19 @@ class AdbGadgetIdTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, '0x22d9 0x2769 8eab51c8\n')
 
+    def test_multiple_board_entries_select_each_factory_identity(self):
+        self.ids.write_text(
+            'example,first 0x1111 0x2222\n'
+            'example,second 0x3333 0x4444\n')
+        for compatible, expected in [
+            (b'example,first\0', '0x1111 0x2222 8eab51c8\n'),
+            (b'example,second\0', '0x3333 0x4444 8eab51c8\n'),
+        ]:
+            self.compatible.write_bytes(compatible)
+            result = self.run_ids()
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(result.stdout, expected)
+
     def test_unknown_board_uses_standard_adb_ids(self):
         self.compatible.write_bytes(b'example,other\0')
         result = self.run_ids()
