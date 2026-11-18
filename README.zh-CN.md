@@ -276,6 +276,11 @@ ADB 使用 `oplusboot.serialno` 中的设备序列号作为 USB 序列号，缺�
 稳定的 `caihong-<machine-id 前缀>` 串号；只有 machine-id 也无效时才回退为
 `caihong-adb`。
 
+USB VID/PID 根据 `/proc/device-tree/compatible` 中匹配到的第一项板型，从
+`/etc/caihong-adbd-usb-ids` 选择。新增板型时追加一行 `compatible VID PID`，
+无需修改 gadget 脚本。未登记的板型使用标准 ADB 身份 `18d1:4ee7`；诊断时可用
+`CAIHONG_ADB_USB_VID` 和 `CAIHONG_ADB_USB_PID` 成对覆盖。
+
 默认自动充电，不额外限制电量。只有显式使用 `--save` 保存设置并启用
 `caihong-charge.service` 才会在开机时恢复；该服务默认不启用。
 固件报告的健康度和容量不是独立测得的电池损耗。

@@ -288,6 +288,13 @@ verbatim. If neither source is available, it derives a stable
 `caihong-<machine-id prefix>` serial, and only uses `caihong-adb` when no valid
 machine ID exists.
 
+The USB vendor and product IDs are selected from the first matching board entry
+in `/etc/caihong-adbd-usb-ids`, using the board strings in
+`/proc/device-tree/compatible`. Add a `compatible VID PID` line for each new
+board instead of changing the gadget script. Boards without an entry use the
+standard ADB identity `18d1:4ee7`. `CAIHONG_ADB_USB_VID` and
+`CAIHONG_ADB_USB_PID` can override both IDs together for diagnostics.
+
 Charging defaults to automatic operation with no extra charge limit. Settings
 persist only when explicitly saved with `--save` and restored by enabling
 `caihong-charge.service`; the service is not enabled by default. Firmware health
