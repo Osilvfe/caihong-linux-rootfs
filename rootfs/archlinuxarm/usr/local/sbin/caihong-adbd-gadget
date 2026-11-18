@@ -6,6 +6,13 @@ CDPATH=
 
 function_name=ffs.adb
 mount_point=/dev/usb-ffs/adb
+usb_vendor_id=${CAIHONG_ADB_USB_VID:-}
+usb_product_id=${CAIHONG_ADB_USB_PID:-}
+usb_ids_file=${CAIHONG_ADB_USB_IDS_FILE:-/etc/caihong-adbd-usb-ids}
+compatible_file=${CAIHONG_ADB_COMPATIBLE_FILE:-/proc/device-tree/compatible}
+serial_file=${CAIHONG_ADB_SERIAL_FILE:-/etc/caihong-adbd-serial}
+cmdline_file=${CAIHONG_ADB_CMDLINE_FILE:-/proc/cmdline}
+hostname_file=${CAIHONG_ADB_HOSTNAME_FILE:-/proc/sys/kernel/hostname}
 configfs=/sys/kernel/config
 gadget_dir=$configfs/usb_gadget/caihong
 function_dir=$gadget_dir/functions/$function_name
@@ -18,6 +25,73 @@ adbd_uid=$(id -u "$adbd_user") || {
 	exit 1
 }
 adbd_gid=$(id -g "$adbd_user")
+
+detect_serial()
+{
+	serial=
+	if [[ -r $cmdline_file ]]; then
+		local cmdline
+		cmdline=$(<"$cmdline_file")
+		for serial_key in oplusboot.serialno androidboot.serialno; do
+			if [[ $cmdline =~ (^|[[:space:]])${serial_key}=([^[:space:]]+) ]]; then
+				serial=${BASH_REMATCH[2]}
+				break
+			fi
+		done
+	fi
+	if [[ -z $serial && -r $serial_file ]]; then
+		serial=$(head -n 1 "$serial_file")
+	fi
+	if [[ -z $serial && -r $hostname_file ]]; then
+		serial=$(<"$hostname_file")
+	fi
+	[[ $serial =~ ^[[:graph:]]{1,64}$ ]] || {
+		echo "invalid ADB serial number: $serial" >&2
+		return 1
+	}
+}
+
+validate_usb_ids()
+{
+	for usb_id in "$usb_vendor_id" "$usb_product_id"; do
+		[[ $usb_id =~ ^0x[[:xdigit:]]{4}$ ]] || {
+			echo "invalid USB vendor/product ID: $usb_id" >&2
+			return 1
+		}
+	done
+}
+
+detect_usb_ids()
+{
+	if [[ -n $usb_vendor_id || -n $usb_product_id ]]; then
+		[[ -n $usb_vendor_id && -n $usb_product_id ]] || {
+			echo 'set both CAIHONG_ADB_USB_VID and CAIHONG_ADB_USB_PID' >&2
+			return 1
+		}
+	else
+		usb_vendor_id=0x18d1
+		usb_product_id=0x4ee7
+		if [[ -r $usb_ids_file && -r $compatible_file ]]; then
+			local compatible board vid pid extra
+			while IFS= read -r -d '' compatible; do
+				while read -r board vid pid extra; do
+					[[ -n $board && $board != \#* ]] || continue
+					if [[ $board == "$compatible" ]]; then
+						[[ -z $extra && -n $vid && -n $pid ]] || {
+							echo "invalid USB ID entry for $compatible" >&2
+							return 1
+						}
+						usb_vendor_id=$vid
+						usb_product_id=$pid
+						validate_usb_ids
+						return
+					fi
+				done < "$usb_ids_file"
+			done < "$compatible_file"
+		fi
+	fi
+	validate_usb_ids
+}
 
 ensure_configfs()
 {
@@ -43,21 +117,18 @@ configure()
 		}
 		sleep 0.1
 	done
+	detect_usb_ids
 	mkdir -p -- "$gadget_dir" "$config_dir" "$function_dir" "$mount_point"
 	mkdir -- "$gadget_dir/strings/0x409" "$config_dir/strings/0x409"
-	printf '0x18d1\n' > "$gadget_dir/idVendor"
-	printf '0x4ee7\n' > "$gadget_dir/idProduct"
+	printf '%s\n' "$usb_vendor_id" > "$gadget_dir/idVendor"
+	printf '%s\n' "$usb_product_id" > "$gadget_dir/idProduct"
 	printf '0x0200\n' > "$gadget_dir/bcdUSB"
 	printf '0x0100\n' > "$gadget_dir/bcdDevice"
 	printf 'Caihong\n' > "$gadget_dir/strings/0x409/manufacturer"
-	printf 'Caihong ADB\n' > "$gadget_dir/strings/0x409/product"
+	printf 'Caihong ADB (%s)\n' "$usb_product_id" > "$gadget_dir/strings/0x409/product"
 	printf 'ADB\n' > "$config_dir/strings/0x409/configuration"
 	printf '250\n' > "$config_dir/MaxPower"
-	local serial
-	serial=$(/usr/local/libexec/caihong-adbd-serial) || {
-		echo "unable to determine the ADB serial" >&2
-		return 1
-	}
+	detect_serial
 	printf '%s\n' "$serial" > "$gadget_dir/strings/0x409/serialnumber"
 	(cd -- "$config_dir" && ln -s -- "../../functions/$function_name" "$function_name")
 	mount -t functionfs adb "$mount_point" -o "uid=$adbd_uid,gid=$adbd_gid"
@@ -105,8 +176,13 @@ case ${1:-} in
 	setup) configure ;;
 	bind) bind ;;
 	teardown) teardown ;;
+	ids)
+		detect_usb_ids
+		detect_serial
+		printf '%s %s %s\n' "$usb_vendor_id" "$usb_product_id" "$serial"
+		;;
 	*)
-		echo "usage: $0 {setup|bind|teardown}" >&2
+		echo "usage: $0 {setup|bind|teardown|ids}" >&2
 		exit 2
 		;;
 esac
