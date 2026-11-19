@@ -35,6 +35,7 @@ jobs:
           python3 tools/test-caihong-autocharge.py
           python3 tools/test-caihong-flashlight-panel.py
           python3 tools/test-install-caihong-modules.py
+          python3 tools/test-install-caihong-vaapi-rootfs.py
           node --test tools/test-release-artifacts.mjs
           shellcheck -x \
             scripts/build-boot-v2.sh \
