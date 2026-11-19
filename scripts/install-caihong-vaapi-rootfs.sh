@@ -55,7 +55,11 @@ fi
 stage_parent="$rootfs/tmp"
 work_dir=$(mktemp -d "$stage_parent/qcom-va-driver.XXXXXX") || exit 1
 source_copy="$work_dir/qcom-va-driver"
-build_dir="$work_dir/build"
+# meson runs inside the chroot, so it must see paths relative to the rootfs,
+# not the host-side paths used to create and copy the work directory.
+chroot_work_dir="/tmp/${work_dir##*/}"
+chroot_source_copy="$chroot_work_dir/qcom-va-driver"
+chroot_build_dir="$chroot_work_dir/build"
 
 cleanup()
 {
@@ -68,14 +72,14 @@ rsync -aHAX --numeric-ids --exclude=.git "$source_tree/" "$source_copy/"
 
 chroot_env=(/usr/bin/env -i HOME=/root LANG=C PATH=/usr/local/sbin:/usr/local/bin:/usr/bin)
 "$chroot_tool" "$rootfs" "${chroot_env[@]}" \
-	meson setup "$build_dir" "$source_copy" \
+	meson setup "$chroot_build_dir" "$chroot_source_copy" \
 	--prefix=/usr --libdir=lib --buildtype=release \
 	-Dgpu_copy=enabled -Dcdsp_vpp=disabled -Dvulkan_vpp=disabled \
 	-Dtests=false
 "$chroot_tool" "$rootfs" "${chroot_env[@]}" \
-	meson compile -C "$build_dir"
+	meson compile -C "$chroot_build_dir"
 "$chroot_tool" "$rootfs" "${chroot_env[@]}" \
-	meson install -C "$build_dir" --no-rebuild
+	meson install -C "$chroot_build_dir" --no-rebuild
 
 for path in usr/lib/dri/qcom_drv_video.so usr/lib/dri/msm_drv_video.so; do
 	if [[ ! -e $rootfs/$path && ! -L $rootfs/$path ]]; then
